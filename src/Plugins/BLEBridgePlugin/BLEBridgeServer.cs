@@ -24,8 +24,6 @@ namespace Antmicro.Renode.Plugins.BLEBridgePlugin
             this.txPort = txPort;
             this.txHost = txHost;
 
-            syncLock = new object();
-
             txSocket = new UdpClient();
             txEndpoint = new IPEndPoint(IPAddress.Parse(txHost), txPort);
 
@@ -45,32 +43,26 @@ namespace Antmicro.Renode.Plugins.BLEBridgePlugin
 
         public void AttachTo(WirelessMedium medium, IRadio radio)
         {
-            lock(syncLock)
+            if(attachedRadio != null)
             {
-                if(attachedRadio != null)
-                {
-                    throw new RecoverableException("BLE Bridge is already attached to a radio.");
-                }
-
-                attachedMedium = medium;
-                attachedRadio = radio;
-                medium.FrameProcessed += OnFrameProcessed;
-
-                this.Log(LogLevel.Info, "BLE Bridge attached to radio on medium.");
+                throw new RecoverableException("BLE Bridge is already attached to a radio.");
             }
+
+            attachedMedium = medium;
+            attachedRadio = radio;
+            medium.FrameProcessed += OnFrameProcessed;
+
+            this.Log(LogLevel.Info, "BLE Bridge attached to radio on medium.");
         }
 
         public void Detach()
         {
-            lock(syncLock)
+            if(attachedMedium != null)
             {
-                if(attachedMedium != null)
-                {
-                    attachedMedium.FrameProcessed -= OnFrameProcessed;
-                    attachedMedium = null;
-                    attachedRadio = null;
-                    this.Log(LogLevel.Info, "BLE Bridge detached.");
-                }
+                attachedMedium.FrameProcessed -= OnFrameProcessed;
+                attachedMedium = null;
+                attachedRadio = null;
+                this.Log(LogLevel.Info, "BLE Bridge detached.");
             }
         }
 
@@ -89,28 +81,16 @@ namespace Antmicro.Renode.Plugins.BLEBridgePlugin
 
         private void OnFrameProcessed(IExternal source, IRadio sender, byte[] frame)
         {
-            IRadio radio;
-            lock(syncLock)
+            if(sender != attachedRadio)
             {
-                radio = attachedRadio;
-                if(!isRunning || radio == null || sender != radio)
-                {
-                    return;
-                }
+                return;
             }
 
             // Protocol: [Type:1][Channel:1][Len:2 LE][Data:N]
             // Type: 0x01 = TX (Renode -> Python)
-            var channel = sender.Channel;
-            if(channel > 255)
-            {
-                this.Log(LogLevel.Warning, "Channel {0} exceeds byte range, clamping to 255", channel);
-                channel = 255;
-            }
-
             var packet = new byte[4 + frame.Length];
             packet[0] = PacketTypeTX;
-            packet[1] = (byte)channel;
+            packet[1] = (byte)sender.Channel;
             packet[2] = (byte)(frame.Length & 0xFF);
             packet[3] = (byte)((frame.Length >> 8) & 0xFF);
             Array.Copy(frame, 0, packet, 4, frame.Length);
@@ -118,11 +98,7 @@ namespace Antmicro.Renode.Plugins.BLEBridgePlugin
             try
             {
                 txSocket.Send(packet, packet.Length, txEndpoint);
-                this.Log(LogLevel.Debug, "TX frame: channel={0}, len={1}", channel, frame.Length);
-            }
-            catch(ObjectDisposedException)
-            {
-                // Socket closed during shutdown, ignore
+                this.Log(LogLevel.Debug, "TX frame: channel={0}, len={1}", sender.Channel, frame.Length);
             }
             catch(Exception e)
             {
@@ -189,20 +165,15 @@ namespace Antmicro.Renode.Plugins.BLEBridgePlugin
 
         private void InjectFrame(int channel, byte[] frame)
         {
-            IRadio radio;
-            lock(syncLock)
+            if(attachedRadio == null)
             {
-                radio = attachedRadio;
-                if(radio == null)
-                {
-                    this.Log(LogLevel.Warning, "Cannot inject frame: no radio attached");
-                    return;
-                }
+                this.Log(LogLevel.Warning, "Cannot inject frame: no radio attached");
+                return;
             }
 
             // Set channel and inject frame
-            radio.Channel = channel;
-            radio.ReceiveFrame(frame, null);
+            attachedRadio.Channel = channel;
+            attachedRadio.ReceiveFrame(frame, null);
 
             this.Log(LogLevel.Debug, "RX frame injected: channel={0}, len={1}", channel, frame.Length);
         }
@@ -211,7 +182,6 @@ namespace Antmicro.Renode.Plugins.BLEBridgePlugin
         private readonly UdpClient rxSocket;
         private readonly IPEndPoint txEndpoint;
         private readonly Thread receiveThread;
-        private readonly object syncLock;
         private readonly int rxPort;
         private readonly int txPort;
         private readonly string txHost;
