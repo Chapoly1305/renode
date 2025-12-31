@@ -1,0 +1,54 @@
+# Matter BLE Bridge Demo Script
+#
+# This script runs the Matter lighting example and bridges BLE frames
+# to the host via UDP.
+#
+# Usage:
+#   1. Start Python bridge first:
+#      python3 ble_bridge.py --dry-run
+#
+#   2. Run this script in Renode:
+#      ./renode matter_ble_bridge.resc
+#
+#   3. Start simulation:
+#      start
+#
+
+# Create BLE medium
+emulation CreateBLEMedium "wireless"
+
+# Create Matter device
+mach create "matter"
+machine LoadPlatformDescription @platforms/boards/silabs/brd4186c.repl
+sysbus LoadELF @matter/matter-silabs-lighting-example.out
+cpu VectorTableOffset `sysbus GetSymbolAddress "__Vectors"`
+
+# Connect radio to wireless medium
+connector Connect sysbus.radio wireless
+
+# Create BLE Bridge Server (UDP)
+# RX port 5000: receives frames from Python bridge
+# TX port 5001: sends frames to Python bridge
+emulation CreateBLEBridgeServer "ble_bridge"
+
+# Attach bridge to wireless medium and radio
+ble_bridge AttachTo wireless sysbus.radio
+
+# Enable radio logging for debugging
+logLevel -1 sysbus.radio
+
+# Show instructions
+echo ""
+echo "================================================"
+echo "Matter BLE Bridge Demo"
+echo "================================================"
+echo ""
+echo "1. Start Python bridge in another terminal:"
+echo "   python3 ble_bridge.py --dry-run"
+echo ""
+echo "2. Start simulation:"
+echo "   start"
+echo ""
+echo "3. Watch BLE frames being bridged!"
+echo ""
+echo "================================================"

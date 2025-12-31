@@ -52,6 +52,7 @@
     <ProjectReference Include="..\Infrastructure\src\Plugins\SampleCommandPlugin\SampleCommandPlugin_NET.csproj"/>
     <ProjectReference Include="..\Infrastructure\src\Plugins\TracePlugin\TracePlugin_NET.csproj"/>
     <ProjectReference Include="..\Plugins\WiresharkPlugin\WiresharkPlugin_NET.csproj"/>
+    <ProjectReference Include="..\Plugins\BLEBridgePlugin\BLEBridgePlugin_NET.csproj"/>
     <ProjectReference Include="..\Plugins\CoSimulationPlugin\CoSimulationPlugin_NET.csproj"/>
     <ProjectReference Include="..\Plugins\SystemCPlugin\SystemCPlugin_NET.csproj"/>
     <ProjectReference Include="..\..\lib\InpliTftpServer\libtftp\libtftp_alt_NET.csproj"/>
