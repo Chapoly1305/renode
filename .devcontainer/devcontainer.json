@@ -8,6 +8,10 @@
         "ghcr.io/devcontainers/features/git:1": {},
         "ghcr.io/devcontainers/features/github-cli:1": {}
     },
+    "mounts": [
+        "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,readonly"
+    ],
     "customizations": {
         "vscode": {
             "extensions": [
@@ -20,7 +24,13 @@
             ],
             "settings": {
                 "dotnet.defaultSolution": "Renode_NET.sln",
-                "omnisharp.projectLoadTimeout": 120
+                "omnisharp.projectLoadTimeout": 120,
+                "terminal.integrated.defaultProfile.linux": "zsh",
+                "terminal.integrated.profiles.linux": {
+                    "zsh": {
+                        "path": "/bin/zsh"
+                    }
+                }
             }
         }
     },
