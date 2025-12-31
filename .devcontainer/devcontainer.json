@@ -1,0 +1,37 @@
+{
+    "name": "Renode Development",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".."
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/git:1": {},
+        "ghcr.io/devcontainers/features/github-cli:1": {}
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-dotnettools.csharp",
+                "ms-dotnettools.csdevkit",
+                "ms-python.python",
+                "ms-vscode.cmake-tools",
+                "twxs.cmake",
+                "editorconfig.editorconfig"
+            ],
+            "settings": {
+                "dotnet.defaultSolution": "Renode_NET.sln",
+                "omnisharp.projectLoadTimeout": 120
+            }
+        }
+    },
+    "postCreateCommand": "git submodule update --init --recursive && pip3 install -r tests/requirements.txt",
+    "remoteUser": "vscode",
+    "mounts": [
+        "source=${localWorkspaceFolder},target=/workspaces/renode,type=bind,consistency=cached"
+    ],
+    "workspaceFolder": "/workspaces/renode",
+    "forwardPorts": [],
+    "runArgs": [
+        "--privileged"
+    ]
+}
