@@ -26,9 +26,6 @@
     },
     "postCreateCommand": "git submodule update --init --recursive && pip3 install -r tests/requirements.txt",
     "remoteUser": "vscode",
-    "mounts": [
-        "source=${localWorkspaceFolder},target=/workspaces/renode,type=bind,consistency=cached"
-    ],
     "workspaceFolder": "/workspaces/renode",
     "forwardPorts": [],
     "runArgs": [

@@ -1,9 +1,20 @@
 # Renode Development Container
 # Based on Ubuntu 22.04 with .NET 8.0 SDK
 
-FROM mcr.microsoft.com/dotnet/sdk:8.0-jammy
+FROM ubuntu:22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
+
+# Install .NET SDK 8.0
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    ca-certificates \
+    && wget https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
+    && dpkg -i packages-microsoft-prod.deb \
+    && rm packages-microsoft-prod.deb \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends dotnet-sdk-8.0 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install essential build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -32,7 +43,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g-dev \
     libssl-dev \
     # Utilities
-    wget \
     curl \
     unzip \
     zip \
@@ -43,7 +53,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Additional tools
     sudo \
     locales \
-    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Set locale
