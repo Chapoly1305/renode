@@ -21,8 +21,18 @@ import sys
 import os
 import random
 from dataclasses import dataclass, field
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from enum import IntEnum
+
+# D-Bus imports (for BlueZ integration without root)
+try:
+    import dbus
+    import dbus.service
+    import dbus.mainloop.glib
+    from gi.repository import GLib
+    DBUS_AVAILABLE = True
+except ImportError:
+    DBUS_AVAILABLE = False
 
 # =============================================================================
 # BLE Constants
@@ -122,6 +132,209 @@ class ConnectionState:
         return self.current_channel
 
 # =============================================================================
+# D-Bus BlueZ Advertisement
+# =============================================================================
+
+BLUEZ_SERVICE = 'org.bluez'
+ADAPTER_IFACE = 'org.bluez.Adapter1'
+LE_ADVERTISING_MANAGER_IFACE = 'org.bluez.LEAdvertisingManager1'
+LE_ADVERTISEMENT_IFACE = 'org.bluez.LEAdvertisement1'
+GATT_MANAGER_IFACE = 'org.bluez.GattManager1'
+DBUS_OM_IFACE = 'org.freedesktop.DBus.ObjectManager'
+DBUS_PROP_IFACE = 'org.freedesktop.DBus.Properties'
+
+
+class DBusAdvertisement(dbus.service.Object if DBUS_AVAILABLE else object):
+    """D-Bus LE Advertisement object for BlueZ."""
+
+    PATH_BASE = '/org/bluez/renode/advertisement'
+
+    def __init__(self, bus, index: int):
+        if not DBUS_AVAILABLE:
+            return
+        self.path = f'{self.PATH_BASE}{index}'
+        self.bus = bus
+        self.ad_type = 'peripheral'
+        self.service_uuids: List[str] = []
+        self.manufacturer_data: Dict[int, Any] = {}
+        self.service_data: Dict[str, Any] = {}
+        self.local_name: Optional[str] = None
+        self.include_tx_power = False
+        self._registered = False
+        dbus.service.Object.__init__(self, bus, self.path)
+
+    def get_properties(self) -> Dict[str, Any]:
+        """Get advertisement properties for D-Bus."""
+        properties = {
+            'Type': self.ad_type,
+        }
+        if self.service_uuids:
+            properties['ServiceUUIDs'] = dbus.Array(self.service_uuids, signature='s')
+        if self.manufacturer_data:
+            properties['ManufacturerData'] = dbus.Dictionary(self.manufacturer_data, signature='qv')
+        if self.service_data:
+            properties['ServiceData'] = dbus.Dictionary(self.service_data, signature='sv')
+        if self.local_name:
+            properties['LocalName'] = dbus.String(self.local_name)
+        if self.include_tx_power:
+            properties['Includes'] = dbus.Array(['tx-power'], signature='s')
+        return {LE_ADVERTISEMENT_IFACE: properties}
+
+    def get_path(self) -> dbus.ObjectPath:
+        return dbus.ObjectPath(self.path)
+
+    def update_from_ad_data(self, ad_data: bytes):
+        """Parse BLE advertising data and update properties."""
+        self.service_uuids = []
+        self.manufacturer_data = {}
+        self.service_data = {}
+        self.local_name = None
+
+        i = 0
+        while i < len(ad_data):
+            if i + 1 >= len(ad_data):
+                break
+            length = ad_data[i]
+            if length == 0:
+                break
+            if i + 1 + length > len(ad_data):
+                break
+            ad_type = ad_data[i + 1]
+            data = ad_data[i + 2:i + 1 + length]
+            i += 1 + length
+
+            # Parse common AD types
+            if ad_type == 0x01:  # Flags
+                pass  # BlueZ handles flags automatically
+            elif ad_type == 0x02 or ad_type == 0x03:  # 16-bit Service UUIDs
+                for j in range(0, len(data), 2):
+                    if j + 2 <= len(data):
+                        uuid16 = struct.unpack('<H', data[j:j+2])[0]
+                        self.service_uuids.append(f'{uuid16:04x}')
+            elif ad_type == 0x06 or ad_type == 0x07:  # 128-bit Service UUIDs
+                for j in range(0, len(data), 16):
+                    if j + 16 <= len(data):
+                        uuid_bytes = data[j:j+16][::-1]  # Reverse for standard format
+                        uuid_str = '-'.join([
+                            uuid_bytes[0:4].hex(),
+                            uuid_bytes[4:6].hex(),
+                            uuid_bytes[6:8].hex(),
+                            uuid_bytes[8:10].hex(),
+                            uuid_bytes[10:16].hex()
+                        ])
+                        self.service_uuids.append(uuid_str)
+            elif ad_type == 0x08 or ad_type == 0x09:  # Local Name
+                try:
+                    self.local_name = data.decode('utf-8')
+                except:
+                    pass
+            elif ad_type == 0xFF:  # Manufacturer Specific Data
+                if len(data) >= 2:
+                    company_id = struct.unpack('<H', data[0:2])[0]
+                    self.manufacturer_data[company_id] = dbus.Array(data[2:], signature='y')
+            elif ad_type == 0x16:  # Service Data - 16 bit UUID
+                if len(data) >= 2:
+                    uuid16 = struct.unpack('<H', data[0:2])[0]
+                    self.service_data[f'{uuid16:04x}'] = dbus.Array(data[2:], signature='y')
+
+    @dbus.service.method(DBUS_PROP_IFACE, in_signature='s', out_signature='a{sv}')
+    def GetAll(self, interface):
+        if interface != LE_ADVERTISEMENT_IFACE:
+            raise dbus.exceptions.DBusException(
+                'org.freedesktop.DBus.Error.InvalidArgs',
+                f'Unknown interface: {interface}')
+        return self.get_properties()[LE_ADVERTISEMENT_IFACE]
+
+    @dbus.service.method(LE_ADVERTISEMENT_IFACE, in_signature='', out_signature='')
+    def Release(self):
+        print(f'[DBUS] Advertisement released')
+
+
+class DBusBLEManager:
+    """Manage BLE advertising via D-Bus/BlueZ."""
+
+    def __init__(self, adapter_name: str = 'hci0'):
+        if not DBUS_AVAILABLE:
+            raise RuntimeError("D-Bus/GLib not available. Install: sudo apt install python3-dbus python3-gi")
+
+        dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+        self.bus = dbus.SystemBus()
+        self.adapter_path = f'/org/bluez/{adapter_name}'
+        self.advertisement: Optional[DBusAdvertisement] = None
+        self._ad_registered = False
+
+        # Get adapter
+        try:
+            adapter_obj = self.bus.get_object(BLUEZ_SERVICE, self.adapter_path)
+            self.adapter_props = dbus.Interface(adapter_obj, DBUS_PROP_IFACE)
+            self.ad_manager = dbus.Interface(adapter_obj, LE_ADVERTISING_MANAGER_IFACE)
+            print(f"[DBUS] Connected to BlueZ adapter {adapter_name}")
+        except dbus.exceptions.DBusException as e:
+            raise RuntimeError(f"Failed to connect to BlueZ: {e}")
+
+        # Ensure adapter is powered on
+        try:
+            powered = self.adapter_props.Get(ADAPTER_IFACE, 'Powered')
+            if not powered:
+                print("[DBUS] Powering on adapter...")
+                self.adapter_props.Set(ADAPTER_IFACE, 'Powered', dbus.Boolean(True))
+        except:
+            pass
+
+    def set_advertising_data(self, ad_data: bytes):
+        """Update advertising data."""
+        if self.advertisement is None:
+            self.advertisement = DBusAdvertisement(self.bus, 0)
+
+        self.advertisement.update_from_ad_data(ad_data)
+        print(f"[DBUS] Updated ad data: uuids={self.advertisement.service_uuids}, "
+              f"name={self.advertisement.local_name}, mfg={list(self.advertisement.manufacturer_data.keys())}")
+
+        # Re-register if already registered (to update data)
+        if self._ad_registered:
+            self._unregister_advertisement()
+        self._register_advertisement()
+
+    def _register_advertisement(self):
+        """Register advertisement with BlueZ."""
+        if self._ad_registered or self.advertisement is None:
+            return
+
+        try:
+            self.ad_manager.RegisterAdvertisement(
+                self.advertisement.get_path(),
+                {},
+                reply_handler=self._register_ad_cb,
+                error_handler=self._register_ad_error_cb
+            )
+        except dbus.exceptions.DBusException as e:
+            print(f"[DBUS] Failed to register advertisement: {e}")
+
+    def _register_ad_cb(self):
+        print("[DBUS] Advertisement registered successfully")
+        self._ad_registered = True
+
+    def _register_ad_error_cb(self, error):
+        print(f"[DBUS] Failed to register advertisement: {error}")
+        self._ad_registered = False
+
+    def _unregister_advertisement(self):
+        """Unregister current advertisement."""
+        if not self._ad_registered or self.advertisement is None:
+            return
+
+        try:
+            self.ad_manager.UnregisterAdvertisement(self.advertisement.get_path())
+            self._ad_registered = False
+        except:
+            pass
+
+    def stop(self):
+        """Stop advertising."""
+        self._unregister_advertisement()
+
+
+# =============================================================================
 # BLE Bridge
 # =============================================================================
 
@@ -129,10 +342,11 @@ class BLEBridge:
     """Bridge BLE frames between Renode and BlueZ."""
 
     def __init__(self, renode_rx_port: int = 5001, renode_tx_port: int = 5000,
-                 hci_dev: int = 0, dry_run: bool = False):
+                 hci_dev: int = 0, dry_run: bool = False, use_dbus: bool = True):
         self.renode_tx_port = renode_tx_port
         self.dry_run = dry_run
         self.hci_dev = hci_dev
+        self.use_dbus = use_dbus
 
         # Renode UDP sockets
         self.renode_rx_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -141,16 +355,29 @@ class BLEBridge:
 
         self.renode_tx_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-        # HCI socket (optional, for real BlueZ integration)
+        # D-Bus manager (preferred, no root required)
+        self.dbus_manager: Optional[DBusBLEManager] = None
+        # HCI socket (legacy, requires root)
         self.hci_sock: Optional[socket.socket] = None
+
         if not dry_run:
-            try:
-                self.hci_sock = self._open_hci_socket(hci_dev)
-                print(f"[INFO] Connected to hci{hci_dev}")
-            except Exception as e:
-                print(f"[WARN] Failed to open HCI socket: {e}")
-                print("[WARN] Running in dry-run mode (no BlueZ connection)")
-                self.dry_run = True
+            if use_dbus and DBUS_AVAILABLE:
+                try:
+                    self.dbus_manager = DBusBLEManager(f'hci{hci_dev}')
+                    print(f"[INFO] Using D-Bus/BlueZ for advertising (no root required)")
+                except Exception as e:
+                    print(f"[WARN] Failed to initialize D-Bus: {e}")
+                    print("[WARN] Falling back to HCI socket mode")
+                    self.use_dbus = False
+
+            if not self.use_dbus or self.dbus_manager is None:
+                try:
+                    self.hci_sock = self._open_hci_socket(hci_dev)
+                    print(f"[INFO] Connected to hci{hci_dev} via raw socket")
+                except Exception as e:
+                    print(f"[WARN] Failed to open HCI socket: {e}")
+                    print("[WARN] Running in dry-run mode (no BlueZ connection)")
+                    self.dry_run = True
 
         # Advertising state
         self.advertising_enabled = False
@@ -162,20 +389,87 @@ class BLEBridge:
         # Access address -> conn_handle mapping
         self.access_addr_map: Dict[int, int] = {}
 
+        # GLib main loop for D-Bus (run in separate thread)
+        self.glib_loop: Optional[Any] = None
+        self.glib_thread: Optional[Any] = None
+
         print(f"[INFO] BLE Bridge started")
         print(f"[INFO]   Renode RX (from Renode): UDP port {renode_rx_port}")
         print(f"[INFO]   Renode TX (to Renode): UDP port {renode_tx_port}")
+        if self.dbus_manager:
+            print(f"[INFO]   Mode: D-Bus/BlueZ (user-space)")
+        elif self.hci_sock:
+            print(f"[INFO]   Mode: Raw HCI socket")
+        else:
+            print(f"[INFO]   Mode: Dry-run (no Bluetooth)")
 
     def _open_hci_socket(self, dev_id: int) -> socket.socket:
         """Open raw HCI socket to BlueZ."""
+        import ctypes
+        import ctypes.util
+
         AF_BLUETOOTH = 31
         BTPROTO_HCI = 1
 
-        sock = socket.socket(AF_BLUETOOTH, socket.SOCK_RAW, BTPROTO_HCI)
-        sock.bind((dev_id,))
-        sock.setblocking(False)
+        # Try to use libbluetooth's hci_open_dev for reliable socket creation
+        libc_name = ctypes.util.find_library('bluetooth')
+        if libc_name:
+            try:
+                libbluetooth = ctypes.CDLL(libc_name)
+                libbluetooth.hci_open_dev.argtypes = [ctypes.c_int]
+                libbluetooth.hci_open_dev.restype = ctypes.c_int
 
-        # Set HCI filter to receive events and ACL data
+                fd = libbluetooth.hci_open_dev(dev_id)
+                print(f"[DEBUG] hci_open_dev({dev_id}) returned fd={fd}")
+                if fd < 0:
+                    raise OSError(f"hci_open_dev({dev_id}) failed with {fd}")
+
+                # Use socket.fromfd to properly duplicate the fd
+                sock = socket.fromfd(fd, AF_BLUETOOTH, socket.SOCK_RAW, BTPROTO_HCI)
+                # Close original fd since fromfd duplicates it
+                import os
+                os.close(fd)
+
+                sock.setblocking(False)
+                print(f"[DEBUG] Socket created successfully")
+
+                # Set HCI filter
+                self._set_hci_filter(sock)
+                print(f"[DEBUG] HCI filter set successfully")
+                return sock
+            except Exception as e:
+                import traceback
+                print(f"[DEBUG] libbluetooth approach failed: {e}")
+                traceback.print_exc()
+
+        # Fallback: manual socket creation
+        sock = socket.socket(AF_BLUETOOTH, socket.SOCK_RAW, BTPROTO_HCI)
+
+        # Try different bind formats
+        bind_attempts = [
+            (dev_id,),           # Python's expected format
+            dev_id,              # Just the integer
+        ]
+
+        bound = False
+        for addr in bind_attempts:
+            try:
+                sock.bind(addr)
+                bound = True
+                break
+            except (OSError, TypeError) as e:
+                continue
+
+        if not bound:
+            sock.close()
+            raise OSError("Could not bind HCI socket - try installing libbluetooth-dev")
+
+        sock.setblocking(False)
+        self._set_hci_filter(sock)
+        return sock
+
+    def _set_hci_filter(self, sock: socket.socket):
+        """Set HCI filter to receive events and ACL data."""
         SOL_HCI = 0
         HCI_FILTER = 2
 
@@ -189,10 +483,24 @@ class BLEBridge:
         hci_filter = struct.pack('<IIIH', type_mask, event_mask_lo, event_mask_hi, opcode)
         sock.setsockopt(SOL_HCI, HCI_FILTER, hci_filter)
 
-        return sock
-
     def run(self):
         """Main event loop."""
+        import threading
+
+        # Start GLib main loop in background thread for D-Bus callbacks
+        if self.dbus_manager and DBUS_AVAILABLE:
+            self.glib_loop = GLib.MainLoop()
+
+            def glib_thread_func():
+                try:
+                    self.glib_loop.run()
+                except:
+                    pass
+
+            self.glib_thread = threading.Thread(target=glib_thread_func, daemon=True)
+            self.glib_thread.start()
+            print("[INFO] D-Bus event loop started")
+
         sockets = [self.renode_rx_sock]
         if self.hci_sock:
             sockets.append(self.hci_sock)
@@ -208,8 +516,19 @@ class BLEBridge:
                         self._handle_renode_frame()
                     elif sock == self.hci_sock:
                         self._handle_hci_packet()
+
+                # Process GLib events if using D-Bus
+                if self.dbus_manager and DBUS_AVAILABLE:
+                    context = GLib.MainContext.default()
+                    while context.pending():
+                        context.iteration(False)
+
         except KeyboardInterrupt:
             print("\n[INFO] Shutting down...")
+            if self.dbus_manager:
+                self.dbus_manager.stop()
+            if self.glib_loop:
+                self.glib_loop.quit()
 
     # =========================================================================
     # Renode -> Python handlers
@@ -279,12 +598,17 @@ class BLEBridge:
         # Update advertising data if changed
         if ad_data != self.current_adv_data:
             self.current_adv_data = ad_data
-            self._set_hci_advertising_data(ad_data)
 
-            if not self.advertising_enabled:
-                self._set_hci_advertising_params()
-                self._enable_hci_advertising(True)
+            # Use D-Bus if available, otherwise fall back to HCI
+            if self.dbus_manager:
+                self.dbus_manager.set_advertising_data(ad_data)
                 self.advertising_enabled = True
+            else:
+                self._set_hci_advertising_data(ad_data)
+                if not self.advertising_enabled:
+                    self._set_hci_advertising_params()
+                    self._enable_hci_advertising(True)
+                    self.advertising_enabled = True
 
     def _handle_scan_rsp(self, channel: int, tx_add: int, payload: bytes):
         """Handle SCAN_RSP from Renode."""
@@ -782,13 +1106,20 @@ def main():
                         help='HCI device number (default: 0 for hci0)')
     parser.add_argument('--dry-run', action='store_true',
                         help='Run without BlueZ connection')
+    parser.add_argument('--no-dbus', action='store_true',
+                        help='Use raw HCI socket instead of D-Bus (requires root)')
     args = parser.parse_args()
+
+    if not DBUS_AVAILABLE and not args.no_dbus and not args.dry_run:
+        print("[WARN] D-Bus not available. Install: sudo apt install python3-dbus python3-gi")
+        print("[WARN] Falling back to raw HCI mode (requires root)")
 
     bridge = BLEBridge(
         renode_rx_port=args.renode_rx_port,
         renode_tx_port=args.renode_tx_port,
         hci_dev=args.hci,
-        dry_run=args.dry_run
+        dry_run=args.dry_run,
+        use_dbus=not args.no_dbus
     )
     bridge.run()
 

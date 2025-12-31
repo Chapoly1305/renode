@@ -1,0 +1,18 @@
+:name: Heiman Matter Firmware
+:description: Run Heiman Matter firmware on EFR32MG24
+
+using sysbus
+
+mach create "heiman"
+machine LoadPlatformDescription @platforms/boards/silabs/brd4186c.repl
+
+# Load Heiman ELF
+sysbus LoadELF @matter/ota_4619_4097_216663_7C6C4F45.elf
+
+# Set vector table - since no symbols, use load address
+cpu VectorTableOffset 0x8006000
+
+# Show UART analyzer
+showAnalyzer sysbus.eusart0
+
+logLevel 3
