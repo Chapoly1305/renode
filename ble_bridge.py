@@ -323,6 +323,12 @@ class BLEBridge:
 
         print(f"[RX DATA] handle=0x{conn_handle:04X}, llid={llid}, sn={sn}, nesn={nesn}, len={length}")
 
+        # Update sequence numbers based on received frame
+        # NESN from Renode tells us what it expects next, so update our tx_sn accordingly
+        # SN from Renode is what it sent, so we should ACK by updating our tx_nesn
+        conn.rx_sn = sn
+        conn.tx_nesn = (sn + 1) & 0x01  # ACK by expecting next sequence
+
         if llid == DataPduLlid.CONTROL:
             self._handle_ll_control(conn, payload)
         elif llid in [DataPduLlid.DATA_START, DataPduLlid.DATA_CONT]:
@@ -642,8 +648,8 @@ class BLEBridge:
     def _send_data_to_renode(self, conn: ConnectionState, pb_flag: int, payload: bytes):
         """Send data PDU to Renode."""
         # Determine LLID from packet boundary flag
-        # pb_flag: 0x02 = first packet (start), 0x01 = continuing
-        if pb_flag == 0x02:
+        # pb_flag: 0x00 = first non-flushable, 0x01 = continuing, 0x02 = first flushable
+        if pb_flag in [0x00, 0x02]:
             llid = DataPduLlid.DATA_START
         else:
             llid = DataPduLlid.DATA_CONT
@@ -665,8 +671,10 @@ class BLEBridge:
         # Update sequence numbers
         conn.tx_sn = (conn.tx_sn + 1) & 0x01
 
-        # Send on data channel
+        # Advance to next data channel for next packet
         channel = conn.current_channel
+        conn.next_channel()
+
         self._send_to_renode(channel, frame)
         print(f"  [TX DATA] ch={channel}, llid={llid}, len={len(payload)}")
 
@@ -707,12 +715,13 @@ class BLEBridge:
             print(f"  [DRY-RUN] Set advertising data: {ad_data.hex()}")
             return
 
-        # Pad to 31 bytes
+        # Truncate to max 31 bytes and pad
+        truncated_len = min(len(ad_data), 31)
         padded = ad_data[:31].ljust(31, b'\x00')
-        params = struct.pack('<B', len(ad_data)) + padded
+        params = struct.pack('<B', truncated_len) + padded
 
         self._send_hci_command(0x08, 0x0008, params)
-        print(f"  [HCI] Set advertising data ({len(ad_data)} bytes)")
+        print(f"  [HCI] Set advertising data ({truncated_len} bytes)")
 
     def _set_hci_scan_response_data(self, data: bytes):
         """Set scan response data via HCI."""
@@ -720,11 +729,13 @@ class BLEBridge:
             print(f"  [DRY-RUN] Set scan response data: {data.hex()}")
             return
 
+        # Truncate to max 31 bytes and pad
+        truncated_len = min(len(data), 31)
         padded = data[:31].ljust(31, b'\x00')
-        params = struct.pack('<B', len(data)) + padded
+        params = struct.pack('<B', truncated_len) + padded
 
         self._send_hci_command(0x08, 0x0009, params)
-        print(f"  [HCI] Set scan response data ({len(data)} bytes)")
+        print(f"  [HCI] Set scan response data ({truncated_len} bytes)")
 
     def _set_hci_advertising_params(self):
         """Set advertising parameters via HCI."""

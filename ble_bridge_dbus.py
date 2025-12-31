@@ -88,7 +88,7 @@ if DBUS_AVAILABLE:
                 if i + 1 >= len(ad_data):
                     break
                 length = ad_data[i]
-                if length == 0 or i + length >= len(ad_data):
+                if length == 0 or i + length > len(ad_data):
                     break
                 ad_type = ad_data[i + 1]
                 data = ad_data[i + 2:i + 1 + length]
@@ -276,22 +276,30 @@ class BLEBridgeDBus:
 
             if ad_data != self.current_ad_data:
                 self.current_ad_data = ad_data
-                self._update_advertisement(ad_data)
+                # Schedule update on GLib main loop for thread safety
+                if not self.dry_run and DBUS_AVAILABLE:
+                    GLib.idle_add(self._update_advertisement, ad_data)
+                else:
+                    self._update_advertisement(ad_data)
 
     def _update_advertisement(self, ad_data: bytes):
-        """Update BlueZ advertisement with new data."""
+        """Update BlueZ advertisement with new data. Must be called from GLib main loop."""
         if self.dry_run:
             print(f'  [DRY-RUN] Would advertise: {ad_data.hex()}')
-            return
+            return False  # Return False for GLib.idle_add
 
         try:
             # Remove old advertisement
             if self.advertisement:
                 try:
                     self.ad_manager.UnregisterAdvertisement(self.advertisement.get_path())
-                except:
+                except dbus.exceptions.DBusException as e:
+                    # Advertisement may already be unregistered
+                    print(f'  [ADV] Unregister warning: {e}')
+                try:
+                    self.advertisement.remove_from_connection()
+                except Exception:
                     pass
-                self.advertisement.remove_from_connection()
 
             # Create new advertisement
             self.advertisement = Advertisement(self.bus, 0, ad_data)
@@ -306,6 +314,8 @@ class BLEBridgeDBus:
 
         except Exception as e:
             print(f'  [ERROR] Failed to update advertisement: {e}')
+
+        return False  # Return False for GLib.idle_add (don't repeat)
 
     def _register_ad_cb(self):
         print('  [ADV] Advertisement registered')
