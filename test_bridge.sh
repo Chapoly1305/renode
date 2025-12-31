@@ -1,22 +1,31 @@
 #!/bin/bash
 # Test BLE bridge with Matter firmware
 
+# Clean up any previous runs
+pkill -9 -f "ble_bridge.py" 2>/dev/null
+pkill -9 -f "renode" 2>/dev/null
+sleep 1
+
 echo "Starting Python bridge..."
 python3 -u ble_bridge.py --dry-run > /tmp/bridge.log 2>&1 &
 BR_PID=$!
 
-sleep 2
+sleep 3
 
 echo "Starting Renode with Matter firmware..."
-timeout 25 ./renode --console --disable-xwt matter_ble_bridge.resc -e "emulation RunFor @20; start" > /tmp/renode.log 2>&1
+stdbuf -oL -eL timeout 25 ./renode --console --disable-xwt matter_ble_bridge.resc -e "emulation RunFor @20; start" > /tmp/renode.log 2>&1
+RENODE_EXIT=$?
 
-sleep 2
+sleep 3
 
 echo "Stopping bridge..."
 kill $BR_PID 2>/dev/null
 
 echo ""
 echo "=== Results ==="
+echo "Renode exit code: $RENODE_EXIT"
+echo "Renode log size: $(wc -l < /tmp/renode.log) lines"
+echo ""
 if grep -q "RX ADV" /tmp/bridge.log; then
     echo "✓ BLE Advertisements captured!"
     grep "RX ADV" /tmp/bridge.log | head -3
