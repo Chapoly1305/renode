@@ -8,6 +8,11 @@ ROOT_PATH="$(cd $(dirname $(readlink -f $0 2>/dev/null || echo $0)); echo $PWD)"
 TESTS_FILE="$ROOT_PATH/tests/tests.yaml"
 TESTS_RESULTS="$ROOT_PATH/output/tests"
 
+# RENODE-186
+mkdir -p "$TESTS_RESULTS"
+UNQ_DIR=$(mktemp -d --tmpdir="$TESTS_RESULTS")
+TESTS_RESULTS="$UNQ_DIR"
+
 . "${ROOT_PATH}/tools/common.sh"
 
 set +e
