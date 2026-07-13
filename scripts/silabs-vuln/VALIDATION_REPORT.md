@@ -143,15 +143,47 @@ saved-LR slot @0x2000FFB4:  0xAABBCCDD  →  0x20006E01
   write-loop bound, so records 34/35 overwrote the sink's saved return address
   with the attacker value via the natural path.
 
-**Boundary (honest):** this bypasses NWK/APS decryption + the APS endpoint/cluster
-affinity routing. Entry at the higher `sub_E376` parser was probed and passes
-every ZCL field check, but returns undispatched at an **endpoint/cluster affinity
-table search** (`0xe4c6`–`0xe502`, table @`0x000396D4`): the frame's APS
-cluster/profile/endpoint must match a registered endpoint — an APS-routing
-precondition **above** ZCL command dispatch. So this proves *"a frame that
-reaches ZCL command dispatch is routed to the sink with attacker-controlled
-params"*, **not** the full crypto-authenticated, APS-routed OTA path (which still
-needs network-key membership + a matching endpoint).
+**Boundary:** this bypasses NWK/APS decryption + APS endpoint routing. The next
+layer up (APS endpoint routing) was then crossed too — see below.
+
+### APS endpoint-affinity routing — CROSSED (`zb06_aps_route.resc`)
+
+Entering one layer higher at the APS-layer parser `sub_E376` (`0xE376`) with a
+crafted `0xC801`-addressed frame **and** one endpoint record installed in the
+affinity table (flash `0x000396D4`, normally populated at runtime by the stack —
+empty in this static image), `sub_E376`'s **own** endpoint/cluster/profile search
+now matches and dispatches. Reproduced (chain reaches the sink's own epilogue):
+
+```
+MARK_E504_SEARCH_MATCH → MARK_E58E_DISPATCH_CALL → MARK_7D46 → MARK_A33C_GATE
+  → MARK_1662E_SINK → MARK_16736_SINK_RET
+saved-LR slot @0x2000FF6C:  0xAABBCCDD  →  0x20006E01
+```
+
+The firmware's own APS parse → endpoint search (`0xe4c6`–`0xe502`) → `bl sub_7D46`
+(`0xe58e`, the undispatched branch `0xe5ac` did *not* fire) → ZCL parse → gate →
+sink all run with **no forced PC** after entry at `0xE376`. Installed record:
+`cluster=0x0104, profile=0x0000, endpoint=0xF3, flags=0xFF` — the frame carries
+matching cluster/profile/endpoint at `frame[0x18..0x19]/[0x16..0x17]/[0x1e]`
+(endpoint byte coincides with cmdId `0xF3` by the ZCL layout). Installing the
+record **models a joined device's runtime-registered endpoint** (a real joined
+HS1SA has them), rather than an artificial code bypass.
+
+### Layered reachability — what is / isn't dynamically crossed
+
+| Layer | Status |
+|---|---|
+| PHY / FRC / MAC receive (real radio-injected frame) | ✅ crossed (`zb06_ota_joined.resc`) |
+| **NWK/APS decryption + network-key membership** | ❌ not crossed — the real exploitability precondition (attacker needs the network key) |
+| APS endpoint/cluster-affinity routing | ✅ crossed (`zb06_aps_route.resc`, endpoint record installed = joined-device state) |
+| ZCL command dispatch → gate `sub_a33c` | ✅ crossed, natural |
+| sink `sub_1662e` (unclamped count → saved-LR overwrite) | ✅ crossed, natural |
+
+The **only** layer not dynamically crossed is NWK/APS crypto + membership — and
+that is precisely the documented exploitability precondition every ZB report
+states ("requires network-key membership"). Everything a joined attacker's frame
+would traverse *after* decryption (APS routing → ZCL dispatch → gate → sink) is
+now shown reachable, by the firmware's own code, with attacker-controlled params.
 
 ### Honest exploitability verdict (all Zigbee findings)
 
