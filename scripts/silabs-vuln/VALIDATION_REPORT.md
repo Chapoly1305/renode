@@ -168,10 +168,17 @@ Reaching the CLI needs radio-model RAIL bring-up (open-ended); tracked separatel
 Driving real firmware surfaced three genuine emulator gaps (distinct from the
 vulns; all upstream-worthy):
 
-1. **tlib Cortex-M33 rejects `MOV.W Rd,SP` (Thumb-2 T3).** Encoding `EA4F 000D`
-   at `0x266A4` in the HS1SA image is treated as UNDEFINSTR; real HW executes it.
-   Causes a ~1.4 ms reset loop (36 reboots / 50 ms). Only per-image patched so
-   far (`zb06_ota_joined.resc`); the proper fix is in `tlib/arch/arm/translate.c`.
+1. **tlib Cortex-M33 rejected `MOV.W Rd,SP` (Thumb-2 T3)** — FIXED at source.
+   Encoding `EA4F 000D` at `0x266A4` in the HS1SA image was treated as
+   UNDEFINSTR; real HW executes it. Caused a ~1.4 ms reset loop (36 reboots /
+   50 ms). Root cause: the data-proc shifted-register wide-shift decode excluded
+   `rm==0xd` (SP) because those encodings are ARMv8.1-M **MVE** long-shifts —
+   but MVE only exists on M55/M85, not M33. Fixed in
+   `tlib/arch/arm/translate.c` by gating the exclusion on `ENABLE_ARCH_MVE`
+   (commit on the Chapoly1305/tlib fork). Verified: fault drops 36×→2× (the 2
+   are the downstream bootloader/SE issues below), and the **unpatched**
+   firmware's own MAC now opens RX (RxWarm/RxSearch transitions appear). The
+   per-image patch in `zb06_ota_joined.resc` is no longer required.
 2. **`SiLabs_HFXO_2` never released `FSMLOCK` on MG21** — FIXED. MG21 has no HFXO
    `MANUALOVERRIDE` command; its `CMU_HFXOInit()` sets `DISONDEMAND` and waits for
    `STATUS.FSMLOCK` to clear, which the model only did in the (MG22-only)
