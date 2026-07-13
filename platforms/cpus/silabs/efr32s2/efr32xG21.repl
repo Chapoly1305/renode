@@ -325,6 +325,9 @@ hfxo: Miscellaneous.SiLabs.SiLabs_HFXO_2 @ {
         sysbus <0x5000C000, +0x4000>  // HFXO0_NS
     }
     startupDelayTicks: 3   //should remain <= 20 to pass early wakeup conditions
+    // MG21 has no HFXO MANUALOVERRIDE command; DISONDEMAND releases the FSM lock.
+    // Without this, CMU_HFXOInit() spins forever polling FSMLOCK.
+    releaseFsmLockOnDisableOnDemand: true
     IRQ -> nvic@45
 
 hfrcoem23: Miscellaneous.SiLabs.SiLabs_HFRCO_1 @ {

@@ -15,7 +15,11 @@ occur (out-of-bounds write / saved-return-address overwrite / PC hijack).
 | EFR32MG13 (Series 1, Cortex-M4) | `platforms/boards/silabs/brd4162a.repl` | pre-existing |
 | EFR32MG24 (Series 2, Cortex-M33) | `platforms/boards/silabs/brd4186c.repl` | pre-existing |
 
-All 11 firmware images boot cleanly (30M–50M instructions, no faults) on these platforms.
+All 11 firmware images load and execute on these platforms. (The function-level
+validations below force PC into the vulnerable function and do not depend on a
+stable full boot — which matters because two emulator-fidelity gaps, documented
+under "Emulator findings" below, otherwise prevent these real firmwares from
+completing boot.)
 
 ## Results — 11/11 CONFIRMED
 
@@ -73,32 +77,110 @@ itself), with PC hooks on every chain node
 (`sub_C22C→sub_E376→sub_7D46→sub_7B5A→sub_a33c→sub_1662e`), and runs the
 firmware's own code — no forced PC.
 
-**Result: OTA reachability NOT demonstrated in this emulation.** The frame is
-delivered to `ReceiveFrame` but dropped at the first PHY gate
-(`RAC_currentRadioState != RxSearch` → "Dropping (not in RXSEARCH)"). No chain
-node executes. Empirically confirmed root cause, consistent across **all four**
-Zigbee firmwares (ZB-02/03/05/06): during a clean boot the radio never leaves
-state **Off** — RxSearch/RxWarm transition count = **0**. The devices are
-un-commissioned; they never open their receiver. This matches every ZB report's
-own precondition ("requires network-key membership / joined node").
+**Result: OTA reachability is PARTIAL — proven up through the firmware's MAC
+receive path from a REAL injected frame (no forced PC), blocked above the MAC.**
+This took two passes; the first pass's conclusion was wrong and is corrected here.
 
-**Correction to the probe agent's first pass:** it also reported a "CPU crash to
-PC=0 at ~10ms." That was **spurious** — an artifact of its own per-instruction
-PC hooks perturbing execution. Re-checked with the plain boot harness, the
-firmware runs cleanly: PC valid and `IsHalted=False` at 10ms (`0x34e04`), 100ms
-(`0xe346`), 300ms (`0xf564`), SP=`0x20005090`. The only real blocker is RX-never-enabled.
+### Renode Cortex-M33 fidelity bug found along the way (verified)
 
-**Honest exploitability verdict (all Zigbee findings):** the sink is real, the
-static source→sink chain exists, but OTA exploitation is **preconditioned on the
-device being commissioned and actively receiving** — a state this emulation does
-not reach because the vuln ELFs are un-provisioned application images that never
-join a network. Closing the gap requires either (1) driving a network
-join/commissioning (BTN1 network-steering, or pre-provisioned NVM network key)
-so the RAC enters RxSearch and nvic@34 (FRC IRQ) is unmasked, then (2)
-delivering an APS-decryptable ZCL data frame. The Matter findings (MT-xx) carry
-the analogous precondition of an established CASE fabric session.
+The un-modified HS1SA firmware is actually in a **~1.4 ms reset loop**, not
+booting cleanly. Pinpointed cause: at **`0x266A4`** the image has
+`EA4F 000D` = `MOV.W R0, SP` (Thumb-2 T3 encoding with Rm=SP). Renode's tlib
+Cortex-M33 rejects it as UNDEFINSTR; the firmware's fault handler (`0x2882C`)
+then `SYSRESETREQ`s. Verified empirically: in 50 ms, PC hits `0x266A4` **36×**
+and the fault handler `0x2882C` **36×** (= 36 reboots). Real Cortex-M33 hardware
+executes this encoding (equivalent to the 16-bit `MOV R0,SP`); it is the **only**
+`MOV.W Rd,SP` in the whole image. This is an upstream-worthy tlib bug that
+affects any MG21/MG24 firmware using that encoding — **not** a property of the
+device.
 
-Chains for all four Zigbee devices: `OTA_REACHABILITY_CHAINS.md`.
+The earlier "radio never leaves Off / clean boot / RX-never-enabled" conclusion
+was an **artifact of this reset loop** (PC sampling kept landing on recurring
+boot addresses, looking valid). Corrected below.
+
+### After patching that one instruction (0x266A4 → 16-bit MOV+NOP)
+
+The firmware's **own MAC brings the radio up to RxSearch by itself** — verified:
+patched boot shows `RxWarm`/`RxSearch` transitions (`Off→RxWarm→RxSearch→
+RxPoweringDown→Off`, ~every 25 ms for network/energy scan); un-patched shows
+**0**. So RX opening is gated by the MAC **scan**, not by `networkState==JOINED`.
+
+A **real** injected mfg-0x120B/0xF3 frame (via `radio.ReceiveFrame`, delivered
+while in RxSearch — no forced PC) then propagates:
+
+| Layer | Reached |
+|---|---|
+| PHY (sync 0xA7 matched, CRC, not dropped) | ✅ |
+| FRC RXDONE → FrameControllerIRQ nvic@34 | ✅ |
+| firmware MAC receive ISR (ACKs the frame: RxFrame→Rx2Tx) | ✅ |
+| ZCL chain `sub_1CC4E→sub_C22C→…→sub_1662e` | ❌ (0 markers) |
+
+### Honest exploitability verdict (all Zigbee findings)
+
+The sink is real (function-level proven) and a real received frame reaches the
+firmware's MAC layer, but the ZCL dispatch chain is **not** reached, for two
+compounding reasons:
+1. **Un-commissioned device** — this ELF has no NVM3/token storage and no
+   network key/parent, so NWK/APS discards the frame before ZCL dispatch. This
+   is the documented exploitability boundary: **the attacker needs network-key
+   membership** (every ZB report says so).
+2. **No stable main loop** — NWK/APS/ZCL dispatch is deferred to the stack tick,
+   which this emulation can't sustain: after the `0x266A4` fix the next fault is
+   a call through the absent Gecko bootloader vector table (`BX 0` →
+   INVSTATE @`0x2AD46`), plus the unemulated Secure-Element mailbox
+   (`0x40094000`–`0x40096000`). Fully closing the gap needs the bootloader image
+   + SE-mailbox emulation, then commissioning (or plaintext injection at the
+   `sub_C22C` input queue, which would only prove parser reachability, not the
+   crypto-authenticated path).
+
+The Matter findings (MT-xx) carry the analogous precondition of an established
+CASE fabric session.
+
+**What was forced vs natural:** forced = the one-instruction emulator fix and
+holding the RxSearch window for injection timing. Natural = radio bring-up,
+RxSearch entry, PHY frame acceptance, and the MAC ISR/ACK.
+
+Harness: `zb06_ota_joined.resc`. Chains: `OTA_REACHABILITY_CHAINS.md`.
+
+## Real SDK firmware (full Zigbee stack, for a future end-to-end OTA test)
+
+To get past the "un-provisioned application ELF" limitation, the complete
+Silicon Labs **Zigbee 4.0 Light** SDK project (part `EFR32MG21A020F1024IM32`,
+board brd4180a) was **built from source** with the system `arm-none-eabi-gcc
+9.3.1` → `z4light.elf` (`__Vectors=0x4000`). This firmware has a CLI
+(`network-creator`/`network-steering`) and runs the full stack, so it *can*
+form/join a network and open RX for real — the vehicle for a genuine end-to-end
+OTA PoC once the radio model supports RAIL bring-up.
+
+Build notes (`z4light_boot.resc` header has the full recipe): the shipped stack
+libs (`libzigbee-*.a`, `librail_*.a`) are **fat LTO objects** built with a much
+newer GCC (LTO bytecode v8926), so `-flto` must be disabled (GCC 9 links their
+real machine code fine); and binutils-2.34 rejects the `(READONLY)` linker-script
+attribute (removed). No newer GCC is required just to build/link.
+
+Boot status on the MG21 platform: runs real reset/CRT/CMU code, passes HFXO
+clock init (after the HFXO fix below), reaches RAIL radio init (~`0x24dce`) and
+busy-waits on an FRC DMA-completion handshake the radio model does not yet drive.
+Reaching the CLI needs radio-model RAIL bring-up (open-ended); tracked separately.
+
+## Emulator findings (real Renode/tlib gaps surfaced by real firmware)
+
+Driving real firmware surfaced three genuine emulator gaps (distinct from the
+vulns; all upstream-worthy):
+
+1. **tlib Cortex-M33 rejects `MOV.W Rd,SP` (Thumb-2 T3).** Encoding `EA4F 000D`
+   at `0x266A4` in the HS1SA image is treated as UNDEFINSTR; real HW executes it.
+   Causes a ~1.4 ms reset loop (36 reboots / 50 ms). Only per-image patched so
+   far (`zb06_ota_joined.resc`); the proper fix is in `tlib/arch/arm/translate.c`.
+2. **`SiLabs_HFXO_2` never released `FSMLOCK` on MG21** — FIXED. MG21 has no HFXO
+   `MANUALOVERRIDE` command; its `CMU_HFXOInit()` sets `DISONDEMAND` and waits for
+   `STATUS.FSMLOCK` to clear, which the model only did in the (MG22-only)
+   MANUALOVERRIDE path → infinite spin. Fixed with an opt-in constructor flag
+   `releaseFsmLockOnDisableOnDemand` (default false → MG22 byte-identical),
+   enabled from `efr32xG21.repl`. Committed to renode-infrastructure.
+3. **Radio model doesn't drive RAIL bring-up handshakes** (FRC DMA-completion
+   flag, synth lock, RAC transitions, sequencer image) — blocks full-stack
+   firmware boot. Open-ended; not addressed here.
 
 ## Files
 
@@ -107,8 +189,12 @@ Chains for all four Zigbee devices: `OTA_REACHABILITY_CHAINS.md`.
   validation harnesses. `mt08_validateA.resc` drives the real MT-08 handler
   end-to-end (in addition to the direct-sink `mt08_validate.resc`).
 - `ZB-06_VALIDATION.md` — detailed writeup of the ZB-06 methodology.
-- `zb06_ota.resc` — over-the-air reachability probe (injects a real frame, no
-  forced PC).
+- `zb06_ota.resc` — first over-the-air reachability probe (injects a real frame,
+  no forced PC; superseded by the joined variant below).
+- `zb06_ota_joined.resc` — OTA probe with the `0x266A4` emulator patch; the
+  firmware's own MAC opens RX and a real frame reaches the MAC layer.
+- `z4light_boot.resc` — boots the from-source-built full-stack Zigbee firmware
+  (`z4light.elf`) with build recipe in its header.
 - `OTA_REACHABILITY_CHAINS.md` — source→sink chains + the network-membership
   precondition for all four Zigbee findings.
 - Firmware ELFs (`*.elf`) are **git-ignored** (not redistributed).
