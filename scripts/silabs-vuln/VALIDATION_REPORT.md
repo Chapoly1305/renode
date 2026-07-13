@@ -115,6 +115,44 @@ while in RxSearch — no forced PC) then propagates:
 | firmware MAC receive ISR (ACKs the frame: RxFrame→Rx2Tx) | ✅ |
 | ZCL chain `sub_1CC4E→sub_C22C→…→sub_1662e` | ❌ (0 markers) |
 
+The radio-injected frame reaches the MAC but not ZCL dispatch (no established
+network → NWK/APS drops it, and no stable stack tick). To test the *next* layer
+— whether the firmware's own ZCL dispatch actually routes such a frame to the
+sink — a separate injection was done one layer up (below).
+
+### ZCL-dispatch injection — closes the two false-positive axes (`zb06_dispatch_inject.resc`)
+
+Function-level validation forces the sink's arguments, so it skips **gate
+reachability** and **parameter fidelity** — the two axes where the corpus's
+retracted findings actually failed (dead-code handler; wrong handler). To test
+them directly, an **already-decrypted plaintext** mfg-0x120B/0xF3 ZCL frame is
+injected at the firmware's ZCL command dispatcher (`sub_7D46`) with the register
+contract `sub_C22C`/`sub_E376` would pass — then the firmware's **own code** runs
+with **no forced PC** into the parser, gate, or sink. Result (reproduced):
+
+```
+MARK_7D46_ZCLDISP → MARK_7B5A → MARK_A33C_GATE → MARK_1662E_SINK   (natural order)
+saved-LR slot @0x2000FFB4:  0xAABBCCDD  →  0x20006E01
+```
+
+- **Gate reachability ✅ NATURAL** — the firmware's `sub_7cc0` classified the
+  bytes as a manufacturer-specific ZCL command (mfgCode 0x120B, cmdId 0xF3),
+  `sub_7B5A` read the parsed struct and called the gate `sub_a33c`, which matched
+  and tail-called the sink — none of it with a forced PC.
+- **Parameter fidelity ✅** — `payload[0x0a]=40` was used **unclamped** as the
+  write-loop bound, so records 34/35 overwrote the sink's saved return address
+  with the attacker value via the natural path.
+
+**Boundary (honest):** this bypasses NWK/APS decryption + the APS endpoint/cluster
+affinity routing. Entry at the higher `sub_E376` parser was probed and passes
+every ZCL field check, but returns undispatched at an **endpoint/cluster affinity
+table search** (`0xe4c6`–`0xe502`, table @`0x000396D4`): the frame's APS
+cluster/profile/endpoint must match a registered endpoint — an APS-routing
+precondition **above** ZCL command dispatch. So this proves *"a frame that
+reaches ZCL command dispatch is routed to the sink with attacker-controlled
+params"*, **not** the full crypto-authenticated, APS-routed OTA path (which still
+needs network-key membership + a matching endpoint).
+
 ### Honest exploitability verdict (all Zigbee findings)
 
 The sink is real (function-level proven) and a real received frame reaches the
