@@ -49,6 +49,57 @@ MT-04, where the TLV iterator's live-heap/object-graph dependency means the loop
 index is forced (the store instructions, EA arithmetic, and frame geometry are
 all real and unmodified).
 
+## Scope of the claim — what is and is NOT proven
+
+The results above prove the **memory-safety primitive** (the sink) on real
+firmware: given the documented arguments, the vulnerable function performs the
+out-of-bounds write / saved-LR overwrite / PC hijack. This is the CWE at the
+instruction level, verified dynamically.
+
+It does **not** by itself prove **over-the-air reachability** — that a real
+radio frame received by the un-modified firmware propagates through the
+NWK/APS/ZCL dispatch and actually calls the sink with attacker-controlled
+arguments. Function-level validation forces entry, bypassing that question.
+Reachability is the axis where the corpus itself has produced false positives
+(ZB-01/07/08/09 were retracted largely for unconfirmed reachability). The OTA
+probe below tests it directly.
+
+## Over-the-air reachability probe (ZB-06, representative)
+
+`zb06_ota.resc` injects a **real** 802.15.4 frame carrying the mfg-0x120B/0xF3
+ZCL command into the booted HS1SA firmware's radio (`radio.ReceiveFrame`,
+byte-array literal with comma separators; the `IRadio sender` may be the radio
+itself), with PC hooks on every chain node
+(`sub_C22C→sub_E376→sub_7D46→sub_7B5A→sub_a33c→sub_1662e`), and runs the
+firmware's own code — no forced PC.
+
+**Result: OTA reachability NOT demonstrated in this emulation.** The frame is
+delivered to `ReceiveFrame` but dropped at the first PHY gate
+(`RAC_currentRadioState != RxSearch` → "Dropping (not in RXSEARCH)"). No chain
+node executes. Empirically confirmed root cause, consistent across **all four**
+Zigbee firmwares (ZB-02/03/05/06): during a clean boot the radio never leaves
+state **Off** — RxSearch/RxWarm transition count = **0**. The devices are
+un-commissioned; they never open their receiver. This matches every ZB report's
+own precondition ("requires network-key membership / joined node").
+
+**Correction to the probe agent's first pass:** it also reported a "CPU crash to
+PC=0 at ~10ms." That was **spurious** — an artifact of its own per-instruction
+PC hooks perturbing execution. Re-checked with the plain boot harness, the
+firmware runs cleanly: PC valid and `IsHalted=False` at 10ms (`0x34e04`), 100ms
+(`0xe346`), 300ms (`0xf564`), SP=`0x20005090`. The only real blocker is RX-never-enabled.
+
+**Honest exploitability verdict (all Zigbee findings):** the sink is real, the
+static source→sink chain exists, but OTA exploitation is **preconditioned on the
+device being commissioned and actively receiving** — a state this emulation does
+not reach because the vuln ELFs are un-provisioned application images that never
+join a network. Closing the gap requires either (1) driving a network
+join/commissioning (BTN1 network-steering, or pre-provisioned NVM network key)
+so the RAC enters RxSearch and nvic@34 (FRC IRQ) is unmasked, then (2)
+delivering an APS-decryptable ZCL data frame. The Matter findings (MT-xx) carry
+the analogous precondition of an established CASE fabric session.
+
+Chains for all four Zigbee devices: `OTA_REACHABILITY_CHAINS.md`.
+
 ## Files
 
 - `boot_mg21.resc`, `boot_mg24.resc` — generic boot harnesses (`$bin`, `$vtor`).
@@ -56,6 +107,10 @@ all real and unmodified).
   validation harnesses. `mt08_validateA.resc` drives the real MT-08 handler
   end-to-end (in addition to the direct-sink `mt08_validate.resc`).
 - `ZB-06_VALIDATION.md` — detailed writeup of the ZB-06 methodology.
+- `zb06_ota.resc` — over-the-air reachability probe (injects a real frame, no
+  forced PC).
+- `OTA_REACHABILITY_CHAINS.md` — source→sink chains + the network-membership
+  precondition for all four Zigbee findings.
 - Firmware ELFs (`*.elf`) are **git-ignored** (not redistributed).
 
 ## Reproduce
