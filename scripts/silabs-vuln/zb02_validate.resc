@@ -47,10 +47,13 @@ sysbus ReadDoubleWord 0x20014FC4
 # Watchpoint at the computed OOB destination (base 0x20005000 + 0xFFC4).
 sysbus AddWatchpointHook 0x20014FC4 DoubleWord Write "self.NoisyLog('>>> WATCHPOINT HIT: attacker-controlled OOB write at 0x20014FC4 (65476 bytes above buffer base) value=0x{0:X}'.format(value))"
 
-# Run far enough to execute the memcpy at 0x14d8c and return.
-sysbus.cpu Step 400
+# Halt exactly when the memcpy (0x14d8c BL sub_3D856) returns to 0x14d90 — the OOB
+# write is complete at that point. A cold hook that sets IsHalted stops the run
+# deterministically. (Do NOT free-run/Step past here: sub_14D08's post-memcpy
+# completeness-check path enters a slow/looping region that stalls single-step —
+# the memory-safety violation has already occurred by 0x14d90.)
+cpu AddHook 0x14d90 "self.ErrorLog('>>> POST-MEMCPY: OOB write done, halting'); self.IsHalted = True"
+emulation RunFor "0.05"
 
 echo ">>> AFTER: OOB target 0x20014FC4 (expect 0x41414141) ="
 sysbus ReadDoubleWord 0x20014FC4
-echo ">>> PC (should have returned toward sentinel 0x20005900) ="
-sysbus.cpu PC
