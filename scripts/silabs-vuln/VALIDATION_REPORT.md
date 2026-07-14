@@ -213,6 +213,48 @@ states ("requires network-key membership"). Everything a joined attacker's frame
 would traverse *after* decryption (APS routing → ZCL dispatch → gate → sink) is
 now shown reachable, by the firmware's own code, with attacker-controlled params.
 
+### Full working RCE — dispatch injection → shellcode execution (3 devices)
+
+For the devices with **full 4-byte PC control**, the chain was carried all the
+way to **attacker shellcode executing**. The injected frame carries a 20-byte
+Cortex-M33 shellcode (movw/movt r0=0xC0DE1337; movw/movt r1=0x20017000; `str
+r0,[r1]`; `b .`); the firmware's **own** overflow loop copies it into the sink's
+stack buffer **and** overwrites the saved LR with the shellcode address|1; the
+sink's **genuine epilogue `pop {..,pc}`** loads PC from the corrupted slot — no
+forced PC after the injection entry — and the shellcode runs, writing the magic
+`0xC0DE1337` to `0x20017000` (a store the firmware would never make). All three
+independently reproduced:
+
+| Device | shellcode lands | saved-LR set to | magic @0x20017000 | epilogue |
+|---|---|---|---|---|
+| ZB-06 | `0x2000FF70` | `0x2000FF71` | `0xDEADBEEF`→`0xC0DE1337` | `0x16736` natural pop |
+| ZB-05 | `0x2000FF92` | `0x2000FF93` | `0xDEADBEEF`→`0xC0DE1337` | `0xd6d2` natural pop |
+| ZB-03 | `0x20006F4C` | `0x20006F4D` | `0xDEADBEEF`→`0xC0DE1337` | `0x22fce` natural pop |
+
+Scripts: `zb0{3,5,6}_rce.resc`. Common scaffolding = the single injection-entry
+contract (bypasses NWK/APS crypto = joined-device model); shellcode is carried
+**in the frame** and written by the firmware's own copy loop (honest
+attacker-controlled form). **ZB-03 caveat (documented):** unlike ZB-05/06 which
+reach their epilogue unconditionally, ZB-03's sink makes an indirect `blx
+entry[4]` (the registered mfg-command handler) before its epilogue, so the
+natural return additionally requires `entry[4]` seeded to a returning handler —
+realistic (a registered handler returns to its dispatcher) but a heavier
+assumption than the other two. `zb03_step0_diag.resc` proves that precondition
+in isolation.
+
+**Not made into full RCE (honest — physically not a clean shellcode-RCE):**
+- **ZB-02** is a **heap** OOB write (not a saved-LR overwrite) — RCE would be
+  indirect via heap-metadata/adjacent-object corruption, not a direct
+  control-flow hijack; not attempted as a shellcode PoC.
+- **ZB-04** is **constrained** (82-byte receive cap → only the low byte of the
+  saved LR is reachable, saved R4/R5/R6 fully) — no arbitrary-PC control is
+  physically possible, exactly as the report classifies it (constrained
+  CFH/DoS). Reproduced at the dispatch level; not upgradable to arbitrary-PC RCE.
+
+Note: SRAM executes in the Renode MG21 model (no XN enforced); on silicon the
+landing depends on MPU/XN, but the **arbitrary-PC hijack is unconditional** and
+an attacker could target ROP/existing code instead of an SRAM shellcode.
+
 ### Honest exploitability verdict (all Zigbee findings)
 
 The sink is real (function-level proven) and a real received frame reaches the
@@ -294,10 +336,14 @@ vulns; all upstream-worthy):
   validation harnesses. `mt08_validateA.resc` drives the real MT-08 handler
   end-to-end (in addition to the direct-sink `mt08_validate.resc`).
 - `ZB-06_VALIDATION.md` — detailed writeup of the ZB-06 methodology.
-- `zb0{2,3,5,6}_dispatch_inject.resc` — ZCL-dispatch-injection reachability PoCs:
-  plaintext frame injected at each device's dispatch entry, firmware's own code
-  routes it through the gate to the sink (no forced PC). `zb06_aps_route.resc`
+- `zb0{2,3,4,5,6}_dispatch_inject.resc` — ZCL-dispatch-injection reachability
+  PoCs: plaintext frame injected at each device's dispatch entry, firmware's own
+  code routes it through the gate to the sink (no forced PC). `zb06_aps_route.resc`
   additionally crosses the APS endpoint-routing layer for ZB-06.
+- `zb0{3,5,6}_rce.resc` — full working RCE: dispatch injection → firmware's own
+  overflow copies in-frame shellcode + overwrites saved LR → genuine epilogue pop
+  → shellcode executes (writes 0xC0DE1337 to 0x20017000). No forced PC after
+  injection. `zb03_step0_diag.resc` proves ZB-03's natural-epilogue precondition.
 - `zb06_ota.resc` — first over-the-air reachability probe (injects a real frame,
   no forced PC; superseded by the joined variant below).
 - `zb06_ota_joined.resc` — OTA probe with the `0x266A4` emulator patch; the
