@@ -120,15 +120,39 @@ network → NWK/APS drops it, and no stable stack tick). To test the *next* laye
 — whether the firmware's own ZCL dispatch actually routes such a frame to the
 sink — a separate injection was done one layer up (below).
 
-### ZCL-dispatch injection — closes the two false-positive axes (`zb06_dispatch_inject.resc`)
+### ZCL-dispatch injection — closes the two false-positive axes (ALL 4 Zigbee devices)
 
 Function-level validation forces the sink's arguments, so it skips **gate
 reachability** and **parameter fidelity** — the two axes where the corpus's
 retracted findings actually failed (dead-code handler; wrong handler). To test
-them directly, an **already-decrypted plaintext** mfg-0x120B/0xF3 ZCL frame is
-injected at the firmware's ZCL command dispatcher (`sub_7D46`) with the register
-contract `sub_C22C`/`sub_E376` would pass — then the firmware's **own code** runs
-with **no forced PC** into the parser, gate, or sink. Result (reproduced):
+them directly, an **already-decrypted plaintext** ZCL frame is injected at each
+firmware's ZCL/APS dispatch entry (the APSDE-DATA.indication boundary) with the
+register/stack contract the stack would pass — then the firmware's **own code**
+runs with **no forced PC** into the parser, gate, or sink. This was done for all
+four Zigbee devices (each independently reproduced):
+
+| Device | Inject entry (dispatch) | Natural marker chain → sink | Observed |
+|---|---|---|---|
+| ZB-06 Heiman | `sub_7D46` (ZCL cmd dispatch) | 7D46→7B5A→a33c gate→**1662e** | saved-LR `0x2000FFB4` → `0x20006E01` |
+| ZB-02 Aqara feeder | `sub_14EB4` (emberCommandReceivedCallback) | 14EB4 gate(clus 0xFCC0+cmd2+msg 0xFFF1)→14DEC→**14D08** | heap OOB `0x20014FC4`(base+65476) → `0x41414141` |
+| ZB-03 Innr plug | `sub_C5F2` (ZCL cmd dispatch fallthrough) | C5F2→C64A→22E06 entry gate(tbl+cmd 0x8004)→**22E06** sink | saved-LR `0x20006FBC` → `0x20006E01` |
+| ZB-05 Niko switchx2 | `sub_6482` (ZCL cmd handler) | 6482→6406→62C8→6A46 veneer→D290→case 0x107→**D540** memmove | saved-LR `0x2000FFCC` → `0x20005001` (+epilogue `pop{..,pc}` executed) |
+
+In every case the mfg-cluster/cmd (or Write-Attribute) **gate is passed by the
+firmware's own classification** (reject-sentinel hooks did *not* fire), and the
+attacker's **unclamped count/length flows to the sink's OOB write** — gate
+reachability and parameter fidelity confirmed, no forced PC below the entry.
+Scripts: `zb0{2,3,5,6}_dispatch_inject.resc`.
+
+Per-device forced scaffolding (documented in each script header, all = modeling
+a joined device's runtime state, not code bypass): ZB-02 pre-seeds reassembly
+state + default-open auth flag and stubs a debug-UART logger that spins in
+emulation (touches no gate/sink logic); ZB-03 pre-seeds the mfg-command table row
++ its lazy-init flag (populated at endpoint registration on a real device); ZB-05
+needs none (static direct call chain — correcting the report's "RAM indirect
+dispatch" note); ZB-06 detailed below.
+
+The ZB-06 case is documented in full as the exemplar:
 
 ```
 MARK_7D46_ZCLDISP → MARK_7B5A → MARK_A33C_GATE → MARK_1662E_SINK   (natural order)
@@ -266,6 +290,10 @@ vulns; all upstream-worthy):
   validation harnesses. `mt08_validateA.resc` drives the real MT-08 handler
   end-to-end (in addition to the direct-sink `mt08_validate.resc`).
 - `ZB-06_VALIDATION.md` — detailed writeup of the ZB-06 methodology.
+- `zb0{2,3,5,6}_dispatch_inject.resc` — ZCL-dispatch-injection reachability PoCs:
+  plaintext frame injected at each device's dispatch entry, firmware's own code
+  routes it through the gate to the sink (no forced PC). `zb06_aps_route.resc`
+  additionally crosses the APS endpoint-routing layer for ZB-06.
 - `zb06_ota.resc` — first over-the-air reachability probe (injects a real frame,
   no forced PC; superseded by the joined variant below).
 - `zb06_ota_joined.resc` — OTA probe with the `0x266A4` emulator patch; the
