@@ -1,5 +1,5 @@
 diff --git a/src/Emulator/Peripherals/Peripherals/Miscellaneous/SiLabs/SiLabs_SecureElement.cs b/src/Emulator/Peripherals/Peripherals/Miscellaneous/SiLabs/SiLabs_SecureElement.cs
-index 78175b71b..821ae56a1 100644
+index 78175b71b..992191863 100644
 --- a/src/Emulator/Peripherals/Peripherals/Miscellaneous/SiLabs/SiLabs_SecureElement.cs
 +++ b/src/Emulator/Peripherals/Peripherals/Miscellaneous/SiLabs/SiLabs_SecureElement.cs
 @@ -24,6 +24,7 @@
@@ -372,7 +372,7 @@ index 78175b71b..821ae56a1 100644
              uint tagPtr;
              uint tagLength;
              UnpackDmaDescriptor(nextDescriptorPtr, out tagPtr, out tagLength, out transferOptions, out nextDescriptorPtr, machine);
-@@ -1697,12 +1860,16 @@ private ResponseCode HandleAesCcmDecryptCommand(uint inputDma, uint outputDma, u
+@@ -1697,14 +1860,17 @@ private ResponseCode HandleAesCcmDecryptCommand(uint inputDma, uint outputDma, u
              FetchFromRam(tagPtr, inputDataAndTag, inputDataLength, tagLength);
              parent.Log(LogLevel.Noisy, "InputDataAndTag=[{0}]", BitConverter.ToString(inputDataAndTag));
  
@@ -393,9 +393,11 @@ index 78175b71b..821ae56a1 100644
 +                         outputDataPtr, outputDataLength, transferOptions, nextDescriptorPtr);
 +            }
              byte[] outputData = new byte[outputDataLength];
- 
+-
              CcmBlockCipher cipher = new CcmBlockCipher(new AesEngine());
-@@ -2093,6 +2260,161 @@ private ResponseCode HandleReadPublicKeyCommand(uint inputDma, uint outputDma, u
+             AeadParameters parameters = new AeadParameters(keyParameter, (int)tagLength*8, nonce, aad);
+             cipher.Init(false, parameters);
+@@ -2093,6 +2259,161 @@ private ResponseCode HandleReadPublicKeyCommand(uint inputDma, uint outputDma, u
              return ResponseCode.Ok;
          }
  
@@ -557,7 +559,7 @@ index 78175b71b..821ae56a1 100644
          private ResponseCode HandleDiffieHellmanCommand(uint inputDma, uint outputDma, uint[] commandParams, uint commandParamsCount)
          {
              if(commandParamsCount != 2)
-@@ -4017,6 +4339,14 @@ public bool SetState(byte[] stateData)
+@@ -4017,6 +4338,14 @@ public bool SetState(byte[] stateData)
                  return true;
              }
  
@@ -572,7 +574,7 @@ index 78175b71b..821ae56a1 100644
              private void ProcessWord(byte[] input, int inOff)
              {
                  X[xOff] = BE_To_UInt32(input, inOff);
-@@ -4239,6 +4569,7 @@ private enum CommandId
+@@ -4239,6 +4568,7 @@ private enum CommandId
              CreateKey                       = 0x0200,
              ReadPublicKey                   = 0x0201,
              DeriveKey                       = 0x0202,
@@ -580,7 +582,7 @@ index 78175b71b..821ae56a1 100644
              Hash                            = 0x0300,
              HashUpdate                      = 0x0301,
              HashHmac                        = 0x0302,
-@@ -4360,4 +4691,4 @@ private enum DeviceDataReadSize
+@@ -4360,4 +4690,4 @@ private enum DeviceDataReadSize
              GetValue       = 0x04,
          }
      }
