@@ -1,0 +1,16 @@
+# Measure the real-time factor: run a known amount of VIRTUAL time, time the wall clock.
+mach create "stock"
+machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
+machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
+sysbus LoadELF @matter/brd2601b-matter-silabs-lighting-example.out
+cpu PerformanceInMips 39
+seqcpu PerformanceInMips 39
+emulation CreateBLEMedium "wireless"
+connector Connect sysbus.radio wireless
+connector Connect sysbus.bleCentral wireless
+connector Connect sysbus.ieee802154 wireless
+emulation SetGlobalSerialExecution true
+emulation SetGlobalAdvanceImmediately false
+logLevel 3
+emulation RunFor "00:00:30"
+quit
