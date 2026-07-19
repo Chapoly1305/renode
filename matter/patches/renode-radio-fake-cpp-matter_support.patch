@@ -1,0 +1,465 @@
+From 0629637aae1dc623acd9158d51b28da91c258360 Mon Sep 17 00:00:00 2001
+From: Junming Chen <me@chapoly1305.com>
+Date: Sun, 19 Jul 2026 06:31:50 -0400
+Subject: [PATCH] [renode] Add radio_fake.cpp: null 802.15.4 radio for the
+ Renode emulator
+
+Drop-in replacement for the RAIL-backed radio.cpp, selected by the
+chip_enable_fake_thread_radio GN arg. otPlatRadioTransmit records a deferred
+TX success (serviced in efr32RadioProcess via otPlatRadioTxDone) and no RX is
+ever delivered, so OpenThread's MLE times out and the FTD self-promotes to
+Leader, forming a single-node Thread network without a functional radio.
+efr32RadioInit is a no-op (never touches RAIL). Provides only the symbols
+radio.cpp uniquely owned plus the sli_ot_radio_state_/events_ helpers the
+still-compiled sibling files call.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+---
+ .../platform-abstraction/efr32/radio_fake.cpp | 435 ++++++++++++++++++
+ 1 file changed, 435 insertions(+)
+ create mode 100644 sdk-copies/openthread/platform-abstraction/efr32/radio_fake.cpp
+
+diff --git a/sdk-copies/openthread/platform-abstraction/efr32/radio_fake.cpp b/sdk-copies/openthread/platform-abstraction/efr32/radio_fake.cpp
+new file mode 100644
+index 00000000..a2c3da5e
+--- /dev/null
++++ b/sdk-copies/openthread/platform-abstraction/efr32/radio_fake.cpp
+@@ -0,0 +1,435 @@
++/*
++ *  Copyright (c) 2024, The OpenThread Authors.
++ *  All rights reserved.
++ *
++ *  Redistribution and use in source and binary forms, with or without
++ *  modification, are permitted provided that the following conditions are met:
++ *  1. Redistributions of source code must retain the above copyright
++ *     notice, this list of conditions and the following disclaimer.
++ *  2. Redistributions in binary form must reproduce the above copyright
++ *     notice, this list of conditions and the following disclaimer in the
++ *     documentation and/or other materials provided with the distribution.
++ *  3. Neither the name of the copyright holder nor the
++ *     names of its contributors may be used to endorse or promote products
++ *     derived from this software without specific prior written permission.
++ *
++ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++ *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ *  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
++ *  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
++ *  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
++ *  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
++ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
++ *  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
++ *  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
++ *  POSSIBILITY OF SUCH DAMAGE.
++ */
++
++/**
++ * @file
++ * @brief
++ *   RENODE "NULL RADIO" -- a gated, non-functional 802.15.4 radio platform.
++ *
++ *   This file is a drop-in replacement for the real EFR32 OpenThread radio
++ *   platform abstraction (radio.cpp). It is compiled INSTEAD OF radio.cpp when
++ *   the GN build arg `chip_enable_fake_thread_radio=true` is set (see
++ *   third_party/silabs/BUILD.gn, source_set("ot-efr32-cert")).
++ *
++ *   Purpose
++ *   -------
++ *   The real radio.cpp drives the prebuilt RAIL library. Under the Renode
++ *   emulator, RAIL never fires SL_RAIL_EVENT_TX_PACKET_SENT, so
++ *   otPlatRadioTxDone() is never called, MLE parent-request never completes and
++ *   ConnectNetwork() hangs forever. This fake radio never touches RAIL. Instead:
++ *
++ *     - otPlatRadioTransmit() stashes the frame and sets a "tx pending" flag,
++ *       then returns immediately (it does NOT call otPlatRadioTxDone here, to
++ *       avoid re-entrancy into the MAC).
++ *     - efr32RadioProcess() -- pumped every OT loop from otSysProcessDrivers()
++ *       in system.c -- notices the pending flag and synthesizes a clean
++ *       otPlatRadioTxDone(instance, txFrame, NULL, OT_ERROR_NONE).
++ *     - No RX frame is EVER delivered (otPlatRadioReceiveDone is never called).
++ *
++ *   With every transmit "succeeding" and no packet ever received, OpenThread's
++ *   MLE times out the parent search. Because the device has a full commissioned
++ *   dataset and is FTD / router-eligible, it self-promotes to Leader, forming
++ *   its own single-node Thread network. The resulting role change makes
++ *   ConnectNetwork() return success automatically. No CHIP-layer faking needed.
++ *
++ *   Linking notes (IMPORTANT)
++ *   -------------------------
++ *   Only radio.cpp is swapped out. The sibling files in the same source_set
++ *   (radio_interface.cpp, radio_instance.cpp, radio_energy_scan.cpp,
++ *   radio_security.cpp, radio_coex.c, radio_csl.cpp, soft_source_match_table.c,
++ *   radio_extension.c, ...) STAY compiled and still own most of the otPlatRadio*
++ *   surface (GetCaps, IsEnabled, GetState, Sleep, promiscuous, CCA threshold,
++ *   GetIeeeEui64, src-match, coex, CSL, ...). We must therefore:
++ *     (a) provide ONLY the symbols radio.cpp uniquely owned (otherwise we get
++ *         duplicate-symbol link errors), and
++ *     (b) also provide the small set of radio.cpp-internal helpers those
++ *         siblings still call, namely a handful of sli_ot_radio_state_* /
++ *         sli_ot_radio_events_* functions (declared in radio_state.h /
++ *         radio_events.h). Ours are benign / no-op and never touch RAIL.
++ *
++ *   Because efr32RadioInit() here is a no-op, RAIL is never initialized. The
++ *   still-linked getters in radio_interface.cpp (e.g. otPlatRadioGetState ->
++ *   sl_rail_get_radio_state(gRailHandle)) will still read the emulated RAIL
++ *   register block; under Renode those reads are benign and do not hang. The
++ *   only OT-visible state that matters for self-promotion -- otPlatRadioIsEnabled
++ *   -- reads sli_ot_radio_state_is_initialized(), which we own here and flip in
++ *   otPlatRadioEnable()/efr32RadioInit().
++ */
++
++#include "radio_events.h"
++#include "radio_security.h"
++#include "radio_state.h"
++
++#include <string.h>
++
++#include <openthread-core-config.h>
++#include <openthread-system.h>
++#include <openthread/instance.h>
++#include <openthread/platform/radio.h>
++
++// ---------------------------------------------------------------------------
++// Internal fake-radio state
++// ---------------------------------------------------------------------------
++
++namespace {
++
++// Mirror of the FLAG_RADIO_INIT_DONE bit that radio.cpp normally tracks.
++// radio_interface.cpp::otPlatRadioIsEnabled() reads this via
++// sli_ot_radio_state_is_initialized(), which we implement below.
++bool sFakeInitialized = false;
++
++// Coarse radio state, driven by otPlatRadioEnable/Disable/Sleep/Receive.
++otRadioState sFakeState = OT_RADIO_STATE_DISABLED;
++
++// Last channel requested via otPlatRadioReceive().
++uint8_t sFakeReceiveChannel = OPENTHREAD_CONFIG_DEFAULT_CHANNEL;
++
++// Transmit buffer handed back to the MAC by otPlatRadioGetTransmitBuffer().
++otRadioFrame sFakeTransmitFrame;
++uint8_t      sFakeTransmitPsdu[OT_RADIO_FRAME_MAX_SIZE];
++
++// Deferred completions -- serviced in efr32RadioProcess() so we never call
++// otPlatRadioTxDone/EnergyScanDone re-entrantly from the API entry points.
++bool          sTxPending          = false;
++otRadioFrame *sTxPendingFrame     = nullptr;
++otInstance   *sTxPendingInstance  = nullptr;
++
++bool        sEnergyScanPending         = false;
++otInstance *sEnergyScanPendingInstance = nullptr;
++
++// Stashed addressing/power state. These never leave the device; we keep them so
++// the corresponding setters have somewhere to write (mirrors the real radio.cpp
++// bookkeeping). GetIeeeEui64 / CCA-threshold getters are owned by the still-
++// compiled radio_interface.cpp, so we intentionally do NOT track those here.
++otExtAddress sFakeExtAddress;
++uint16_t     sFakeShortAddress  = 0xFFFF;
++uint16_t     sFakePanId         = 0xFFFF;
++int8_t       sFakeTransmitPower = 0;
++
++} // namespace
++
++// ---------------------------------------------------------------------------
++// Lifecycle: init / deinit / process pump
++// ---------------------------------------------------------------------------
++
++extern "C" void efr32RadioInit(void)
++{
++    // Benign: do NOT touch RAIL. Just set up the transmit buffer and mark the
++    // radio "initialized" so otPlatRadioIsEnabled()/otPlatRadioEnable() behave.
++    if (sFakeInitialized)
++    {
++        return;
++    }
++
++    memset(&sFakeTransmitFrame, 0, sizeof(sFakeTransmitFrame));
++    memset(sFakeTransmitPsdu, 0, sizeof(sFakeTransmitPsdu));
++    sFakeTransmitFrame.mPsdu   = sFakeTransmitPsdu;
++    sFakeTransmitFrame.mLength = 0;
++
++    memset(&sFakeExtAddress, 0, sizeof(sFakeExtAddress));
++
++    sTxPending          = false;
++    sTxPendingFrame     = nullptr;
++    sTxPendingInstance  = nullptr;
++    sEnergyScanPending  = false;
++
++    sFakeState       = OT_RADIO_STATE_DISABLED;
++    sFakeInitialized = true;
++}
++
++extern "C" void efr32RadioDeinit(void)
++{
++    sFakeInitialized   = false;
++    sFakeState         = OT_RADIO_STATE_DISABLED;
++    sTxPending         = false;
++    sEnergyScanPending = false;
++}
++
++extern "C" void efr32RadioProcess(otInstance *aInstance)
++{
++    OT_UNUSED_VARIABLE(aInstance);
++
++    // Complete any pending transmit with a clean success. Passing a NULL ack
++    // frame with OT_ERROR_NONE is fine for the broadcast MLE parent-request
++    // frames that drive self-promotion (they do not require an ack).
++    if (sTxPending)
++    {
++        otInstance   *instance = (sTxPendingInstance != nullptr) ? sTxPendingInstance : aInstance;
++        otRadioFrame *frame    = (sTxPendingFrame != nullptr) ? sTxPendingFrame : &sFakeTransmitFrame;
++
++        sTxPending         = false;
++        sTxPendingFrame    = nullptr;
++        sTxPendingInstance = nullptr;
++
++        otPlatRadioTxDone(instance, frame, /* aAckFrame */ nullptr, OT_ERROR_NONE);
++    }
++
++    // Complete any pending energy scan with a benign floor RSSI.
++    if (sEnergyScanPending)
++    {
++        otInstance *instance = (sEnergyScanPendingInstance != nullptr) ? sEnergyScanPendingInstance : aInstance;
++
++        sEnergyScanPending         = false;
++        sEnergyScanPendingInstance = nullptr;
++
++        otPlatRadioEnergyScanDone(instance, /* aEnergyScanMaxRssi */ -100);
++    }
++}
++
++// ---------------------------------------------------------------------------
++// Radio enable / state machine
++// ---------------------------------------------------------------------------
++
++extern "C" otError otPlatRadioEnable(otInstance *aInstance)
++{
++    OT_UNUSED_VARIABLE(aInstance);
++    sFakeInitialized = true;
++    if (sFakeState == OT_RADIO_STATE_DISABLED)
++    {
++        sFakeState = OT_RADIO_STATE_SLEEP;
++    }
++    return OT_ERROR_NONE;
++}
++
++extern "C" otError otPlatRadioDisable(otInstance *aInstance)
++{
++    OT_UNUSED_VARIABLE(aInstance);
++    sFakeState = OT_RADIO_STATE_DISABLED;
++    return OT_ERROR_NONE;
++}
++
++extern "C" otError otPlatRadioReceive(otInstance *aInstance, uint8_t aChannel)
++{
++    OT_UNUSED_VARIABLE(aInstance);
++    sFakeReceiveChannel        = aChannel;
++    sFakeTransmitFrame.mChannel = aChannel;
++    sFakeState                 = OT_RADIO_STATE_RECEIVE;
++    return OT_ERROR_NONE;
++}
++
++#if (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
++extern "C" otError otPlatRadioReceiveAt(otInstance *aInstance, uint8_t aChannel, uint32_t aStart, uint32_t aDuration)
++{
++    OT_UNUSED_VARIABLE(aInstance);
++    OT_UNUSED_VARIABLE(aStart);
++    OT_UNUSED_VARIABLE(aDuration);
++    // Never actually schedule an RX window -- no frame is ever delivered.
++    sFakeReceiveChannel        = aChannel;
++    sFakeTransmitFrame.mChannel = aChannel;
++    return OT_ERROR_NONE;
++}
++#endif // (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
++
++// ---------------------------------------------------------------------------
++// Transmit
++// ---------------------------------------------------------------------------
++
++extern "C" otRadioFrame *otPlatRadioGetTransmitBuffer(otInstance *aInstance)
++{
++    OT_UNUSED_VARIABLE(aInstance);
++    sFakeTransmitFrame.mPsdu = sFakeTransmitPsdu;
++    return &sFakeTransmitFrame;
++}
++
++extern "C" otError otPlatRadioTransmit(otInstance *aInstance, otRadioFrame *aFrame)
++{
++    // Stash the frame and defer the completion to efr32RadioProcess(). Do NOT
++    // call otPlatRadioTxDone() here (that would re-enter the MAC).
++    //
++    // We intentionally do NOT call otPlatRadioTxStarted() here. The real
++    // radio.cpp only calls it on a *failed* TX start; the normal success path is
++    // signalled by the RAIL TX_STARTED event. Since the EFR32 radio advertises
++    // OT_RADIO_CAPS_ACK_TIMEOUT (see radio_interface.cpp), OpenThread's sub_mac
++    // does not rely on otPlatRadioTxStarted for its ACK-timeout timer, so the
++    // single deferred otPlatRadioTxDone() in efr32RadioProcess() is sufficient.
++    sTxPendingInstance = aInstance;
++    sTxPendingFrame    = aFrame;
++    sTxPending         = true;
++
++    sFakeState = OT_RADIO_STATE_TRANSMIT;
++
++    return OT_ERROR_NONE;
++}
++
++// ---------------------------------------------------------------------------
++// Simple getters / setters (no RAIL)
++// ---------------------------------------------------------------------------
++
++extern "C" int8_t otPlatRadioGetRssi(otInstance *aInstance)
++{
++    OT_UNUSED_VARIABLE(aInstance);
++    return -80;
++}
++
++extern "C" otError otPlatRadioSetTransmitPower(otInstance *aInstance, int8_t aPower)
++{
++    OT_UNUSED_VARIABLE(aInstance);
++    sFakeTransmitPower = aPower;
++    return OT_ERROR_NONE;
++}
++
++extern "C" otError otPlatRadioSetChannelMaxTransmitPower(otInstance *aInstance, uint8_t aChannel, int8_t aMaxPower)
++{
++    OT_UNUSED_VARIABLE(aInstance);
++    OT_UNUSED_VARIABLE(aChannel);
++    OT_UNUSED_VARIABLE(aMaxPower);
++    return OT_ERROR_NONE;
++}
++
++extern "C" void otPlatRadioSetPanId(otInstance *aInstance, uint16_t aPanId)
++{
++    OT_UNUSED_VARIABLE(aInstance);
++    sFakePanId = aPanId;
++}
++
++extern "C" void otPlatRadioSetShortAddress(otInstance *aInstance, uint16_t aAddress)
++{
++    OT_UNUSED_VARIABLE(aInstance);
++    sFakeShortAddress = aAddress;
++}
++
++extern "C" void otPlatRadioSetExtendedAddress(otInstance *aInstance, const otExtAddress *aAddress)
++{
++    OT_UNUSED_VARIABLE(aInstance);
++    if (aAddress != nullptr)
++    {
++        sFakeExtAddress = *aAddress;
++    }
++}
++
++// ---------------------------------------------------------------------------
++// Energy scan
++// ---------------------------------------------------------------------------
++
++extern "C" otError otPlatRadioEnergyScan(otInstance *aInstance, uint8_t aScanChannel, uint16_t aScanDuration)
++{
++    OT_UNUSED_VARIABLE(aScanChannel);
++    OT_UNUSED_VARIABLE(aScanDuration);
++    // Defer the "done" callback to the process pump (see efr32RadioProcess()).
++    sEnergyScanPendingInstance = aInstance;
++    sEnergyScanPending         = true;
++    return OT_ERROR_NONE;
++}
++
++// ---------------------------------------------------------------------------
++// Thread 1.2 transmit-security setters.
++//
++// These simply forward to the security helpers implemented in radio_security.cpp
++// (which stays compiled and does NOT touch RAIL). Keeping them wired preserves
++// MAC key / frame-counter bookkeeping even though frames never leave the device.
++// ---------------------------------------------------------------------------
++
++#if (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
++
++// The sli_ot_radio_security_* helpers are declared in radio_security.h (included
++// above) and defined in radio_security.cpp, which stays compiled and does not
++// touch RAIL.
++
++extern "C" void otPlatRadioSetMacKey(otInstance             *aInstance,
++                                     uint8_t                 aKeyIdMode,
++                                     uint8_t                 aKeyId,
++                                     const otMacKeyMaterial *aPrevKey,
++                                     const otMacKeyMaterial *aCurrKey,
++                                     const otMacKeyMaterial *aNextKey,
++                                     otRadioKeyType          aKeyType)
++{
++    sli_ot_radio_security_set_mac_key(aInstance, aKeyIdMode, aKeyId, aPrevKey, aCurrKey, aNextKey, aKeyType);
++}
++
++extern "C" void otPlatRadioSetMacFrameCounter(otInstance *aInstance, uint32_t aMacFrameCounter)
++{
++    sli_ot_radio_security_set_mac_frame_counter(aInstance, aMacFrameCounter);
++}
++
++extern "C" void otPlatRadioSetMacFrameCounterIfLarger(otInstance *aInstance, uint32_t aMacFrameCounter)
++{
++    sli_ot_radio_security_set_mac_frame_counter_if_larger(aInstance, aMacFrameCounter);
++}
++
++#endif // (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)
++
++// ---------------------------------------------------------------------------
++// radio.cpp-internal helpers still referenced by the sibling files that remain
++// compiled (radio_interface.cpp, radio_instance.cpp, radio_energy_scan.cpp).
++// These are declared in radio_state.h / radio_events.h. All are benign here and
++// never touch RAIL.
++// ---------------------------------------------------------------------------
++
++extern "C" bool sli_ot_radio_state_is_initialized(void)
++{
++    return sFakeInitialized;
++}
++
++extern "C" bool sli_ot_radio_state_is_transmitting_or_scanning(void)
++{
++    // Report the radio as never busy so the MAC's transmit/scan paths are never
++    // deferred or queued behind an in-flight (fake) operation.
++    return false;
++}
++
++extern "C" bool sli_ot_radio_state_is_tx_data_ongoing(void)
++{
++    return sTxPending;
++}
++
++extern "C" void sli_ot_radio_state_set_idle(void)
++{
++    // No RAIL: nothing to idle. Reflect an idle/sleep state.
++    if (sFakeState != OT_RADIO_STATE_DISABLED)
++    {
++        sFakeState = OT_RADIO_STATE_SLEEP;
++    }
++}
++
++extern "C" void sli_ot_radio_state_set_scheduled_rx_pending(bool aPending)
++{
++    OT_UNUSED_VARIABLE(aPending);
++    // No scheduled RX is ever performed.
++}
++
++#ifdef SL_CATALOG_RAIL_UTIL_IEEE802154_STACK_EVENT_PRESENT
++// When the IEEE 802.15.4 stack-event component is present these are real symbols
++// (radio.cpp defines them; radio_interface.cpp calls the first one). When the
++// component is absent, radio_events.h turns both into ((void)0)/(0) macros and
++// no symbol is required -- hence the same guard the real radio.cpp uses.
++extern "C" sl_rail_util_ieee802154_stack_event_t sli_ot_radio_events_handle_phy_stack_event_with_status(
++    sl_rail_util_ieee802154_stack_event_t stackEvent,
++    uint32_t                              supplement)
++{
++    OT_UNUSED_VARIABLE(stackEvent);
++    OT_UNUSED_VARIABLE(supplement);
++    return SL_RAIL_UTIL_IEEE802154_STACK_STATUS_SUCCESS;
++}
++
++extern "C" void sli_ot_radio_events_handle_phy_stack_event(sl_rail_util_ieee802154_stack_event_t stackEvent,
++                                                           uint32_t                              supplement)
++{
++    OT_UNUSED_VARIABLE(stackEvent);
++    OT_UNUSED_VARIABLE(supplement);
++}
++#endif // SL_CATALOG_RAIL_UTIL_IEEE802154_STACK_EVENT_PRESENT
+-- 
+2.50.1 (Apple Git-155)
+

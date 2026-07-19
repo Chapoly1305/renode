@@ -44,6 +44,13 @@ emulation SetGlobalQuantum "0.0001"
 
 logLevel 2
 
+# Silence the fake "null radio" register-access flood. With chip_enable_fake_thread_radio the
+# RAIL-backed radio.cpp is replaced by a stub, but the board's RAIL register block + sequencer core
+# still get poked continuously (~hundreds of WARNING lines/sec). In REAL-TIME mode that logging steals
+# CPU/I-O from the timing-sensitive commissioning crypto phase (causing flaky DAC/PAI-cert timeouts),
+# so drop it to Error. Remove this line when debugging the radio.
+logLevel 3 sysbus.radio
+
 start
 
 echo ""

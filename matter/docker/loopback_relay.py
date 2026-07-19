@@ -15,6 +15,7 @@ Verified on-host: probe -> relay -> Renode -> EUSART1 delivered CONNECT+SUBSCRIB
 import socket
 import sys
 import threading
+import time
 
 
 def pipe(src, dst):
@@ -50,7 +51,25 @@ def main():
 
     while True:
         client, _ = srv.accept()
-        upstream = socket.create_connection((remote_host, remote_port))
+        # Connect upstream to the host's Renode. host.docker.internal routing can transiently fail
+        # ("Network is unreachable"/"Connection refused") right after a Renode restart, so retry a
+        # few times and -- crucially -- NEVER let one bad connection kill the accept loop (that would
+        # leave the relay port dead and chip-tool sees "Connection refused" on every later attempt).
+        upstream = None
+        for attempt in range(10):
+            try:
+                upstream = socket.create_connection((remote_host, remote_port), timeout=3)
+                break
+            except OSError as e:
+                print(f"relay: upstream connect failed ({e}); retry {attempt + 1}/10", flush=True)
+                time.sleep(0.5)
+        if upstream is None:
+            print("relay: giving up on this client; keeping listener open", flush=True)
+            try:
+                client.close()
+            except OSError:
+                pass
+            continue
         upstream.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         threading.Thread(target=pipe, args=(client, upstream), daemon=True).start()

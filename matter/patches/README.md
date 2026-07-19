@@ -1,5 +1,18 @@
 # connectedhomeip fake CHIPoBLE transport — patch & modifications
 
+> **2026-07-19 — GOAL COMPLETE.** All three targets work end-to-end (BLE commission → operate on Thread
+> as Leader → operational CASE + CommissioningComplete via chip-tool over a fake operational transport).
+> See `../HANDOFF.md` for the current status, build recipe, reproduction, and the real-time reliability
+> caveat. Patches in this dir now capture FOUR layers:
+> - `connectedhomeip-fake-ble-transport.patch` — the original fake CHIPoBLE transport (below).
+> - `renode-fake-thread-radio-and-operational.patch` — fake Thread radio + non-blocking fake-BLE read +
+>   fake OPERATIONAL transport (connectedhomeip main repo; commits `82fa2adcea..185dcb9d6f`, branch
+>   `chapoly1305/fake-ble-transport`).
+> - `renode-radio-fake-cpp-matter_support.patch` — `radio_fake.cpp` (the `matter_support` SUBMODULE; its
+>   only remote is the SiliconLabs upstream with no push access, so this patch is the reliable capture).
+> - `renode-secure-element-crypto.patch` — the Renode SiLabs Secure-Engine crypto fixes (sl-renode repo).
+
+
 This directory preserves the **connectedhomeip source changes** the Renode Matter commissioning
 feature depends on. In the working checkout (`/Volumes/Tools/connectedhomeip`) these live as
 **uncommitted WIP**, so they are captured here as an applyable patch to avoid losing them and to

@@ -1,0 +1,769 @@
+diff --git a/src/app/server/Server.cpp b/src/app/server/Server.cpp
+index 08271dd925..4fbf3d62ef 100644
+--- a/src/app/server/Server.cpp
++++ b/src/app/server/Server.cpp
+@@ -399,6 +399,10 @@ CHIP_ERROR Server::Init(const ServerInitParams & initParams)
+ #if CHIP_DEVICE_CONFIG_ENABLE_NFC_BASED_COMMISSIONING
+                     ,
+                 NfcListenParameters(nullptr)
++#endif
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++                    ,
++                chip::Transport::FakeOperationalListenParameters()
+ #endif
+             );
+         },
+@@ -450,6 +454,10 @@ CHIP_ERROR Server::Init(const ServerInitParams & initParams)
+ #if CHIP_DEVICE_CONFIG_ENABLE_NFC_BASED_COMMISSIONING
+                                ,
+                            NfcListenParameters(nullptr)
++#endif
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++                           ,
++                           chip::Transport::FakeOperationalListenParameters()
+ #endif
+     );
+ #endif // CHIP_DEVICE_CONFIG_ENABLE_PORT_RETRY
+diff --git a/src/app/server/Server.h b/src/app/server/Server.h
+index 9427554142..72a2108d6b 100644
+--- a/src/app/server/Server.h
++++ b/src/app/server/Server.h
+@@ -77,6 +77,9 @@
+ #if CHIP_DEVICE_CONFIG_ENABLE_NFC_BASED_COMMISSIONING
+ #include <transport/raw/NFC.h>
+ #endif
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++#include <transport/raw/FakeOperational.h>
++#endif
+ 
+ #if CHIP_CONFIG_ENABLE_ICD_SERVER
+ #include <app/icd/server/ICDManager.h> // nogncheck
+@@ -130,6 +133,10 @@ using ServerTransportMgr = chip::TransportMgr<chip::Transport::UDP
+ #if CHIP_DEVICE_CONFIG_ENABLE_NFC_BASED_COMMISSIONING
+                                               ,
+                                               chip::Transport::NFC
++#endif
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++                                              ,
++                                              chip::Transport::FakeOperational
+ #endif
+                                               >;
+ 
+diff --git a/src/controller/CHIPDeviceControllerFactory.cpp b/src/controller/CHIPDeviceControllerFactory.cpp
+index caca4bc720..4124ae77c8 100644
+--- a/src/controller/CHIPDeviceControllerFactory.cpp
++++ b/src/controller/CHIPDeviceControllerFactory.cpp
+@@ -41,6 +41,10 @@
+ #include <protocols/secure_channel/CASEServer.h>
+ #include <protocols/secure_channel/SimpleSessionResumptionStorage.h>
+ 
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++#include <transport/raw/FakeOperational.h>
++#endif
++
+ using namespace chip::Inet;
+ using namespace chip::System;
+ using namespace chip::Credentials;
+@@ -209,6 +213,10 @@ CHIP_ERROR DeviceControllerFactory::InitSystemState(FactoryInitParams params)
+ #if CHIP_DEVICE_CONFIG_ENABLE_NFC_BASED_COMMISSIONING
+                                                             ,
+                                                         Transport::NfcListenParameters(nullptr)
++#endif
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++                                                            ,
++                                                        Transport::FakeOperationalListenParameters()
+ #endif
+                                                             ));
+ 
+diff --git a/src/controller/CHIPDeviceControllerSystemState.h b/src/controller/CHIPDeviceControllerSystemState.h
+index a19e8a0f3d..2651768592 100644
+--- a/src/controller/CHIPDeviceControllerSystemState.h
++++ b/src/controller/CHIPDeviceControllerSystemState.h
+@@ -59,6 +59,9 @@
+ #if CHIP_DEVICE_CONFIG_ENABLE_NFC_BASED_COMMISSIONING
+ #include <transport/raw/NFC.h>
+ #endif
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++#include <transport/raw/FakeOperational.h>
++#endif
+ 
+ namespace chip {
+ 
+@@ -98,6 +101,10 @@ using DeviceTransportMgr = TransportMgr<
+ #if CHIP_DEVICE_CONFIG_ENABLE_NFC_BASED_COMMISSIONING
+     ,
+     Transport::NFC /* NFC */
++#endif
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++    ,
++    Transport::FakeOperational /* Renode emulation only: operational CHIP over a byte-pipe */
+ #endif
+     >;
+ 
+diff --git a/src/lib/address_resolve/AddressResolve_DefaultImpl.cpp b/src/lib/address_resolve/AddressResolve_DefaultImpl.cpp
+index 4b60bbf6e5..6192b81588 100644
+--- a/src/lib/address_resolve/AddressResolve_DefaultImpl.cpp
++++ b/src/lib/address_resolve/AddressResolve_DefaultImpl.cpp
+@@ -21,6 +21,10 @@
+ #include <tracing/macros.h>
+ #include <transport/raw/PeerAddress.h>
+ 
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++#include <transport/raw/FakeOperational.h>
++#endif
++
+ namespace chip {
+ namespace AddressResolve {
+ namespace Impl {
+@@ -206,11 +210,36 @@ CHIP_ERROR Resolver::LookupNode(const NodeLookupRequest & request, Impl::NodeLoo
+ 
+     handle.ResetForLookup(mTimeSource.GetMonotonicTimestamp(), request);
+     auto & peerId = request.GetPeerId();
++
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++    // Renode emulation only: the emulated single-node Thread device has no border router / SRP / DNS-SD
++    // path the host can reach, so normal operational discovery cannot complete. Short-circuit mDNS and
++    // hand back a static PeerAddress routed to the fake operational transport. Deliver the result
++    // asynchronously on the event loop (not synchronously) because LookupNode is called from inside
++    // OperationalSessionSetup::Connect and a synchronous callback would re-enter it.
++    //
++    // The handle is intentionally NOT added to mActiveLookups: IsActive() stays false, so a subsequent
++    // CancelLookup on this handle is a safe no-op (returns CHIP_ERROR_INVALID_ARGUMENT, which callers
++    // already guard against via IsActive()).
++    {
++        NodeListener * listener = handle.GetListener();
++        VerifyOrReturnError(listener != nullptr, CHIP_ERROR_INCORRECT_STATE);
++        const PeerId capturedPeerId = peerId;
++        ChipLogProgress(Discovery, "Fake operational transport: short-circuiting lookup for " ChipLogFormatPeerId,
++                        ChipLogValuePeerId(capturedPeerId));
++        return mSystemLayer->ScheduleLambda([listener, capturedPeerId] {
++            ResolveResult result;
++            result.address = chip::Transport::PeerAddress(chip::Transport::Type::kFakeOperational);
++            listener->OnNodeAddressResolved(capturedPeerId, result);
++        });
++    }
++#else
+     ReturnErrorOnFailure(Dnssd::Resolver::Instance().ResolveNodeId(peerId));
+     mActiveLookups.PushBack(&handle);
+     ReArmTimer();
+     ChipLogProgress(Discovery, "Lookup started for " ChipLogFormatPeerId, ChipLogValuePeerId(peerId));
+     return CHIP_NO_ERROR;
++#endif // CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
+ }
+ 
+ CHIP_ERROR Resolver::TryNextResult(Impl::NodeLookupHandle & handle)
+diff --git a/src/lib/core/BUILD.gn b/src/lib/core/BUILD.gn
+index d3e003a8a9..6a7f0e1c3f 100644
+--- a/src/lib/core/BUILD.gn
++++ b/src/lib/core/BUILD.gn
+@@ -22,6 +22,16 @@ import("${chip_root}/build/chip/tests.gni")
+ import("${chip_root}/src/inet/inet.gni")
+ import("core.gni")
+ 
++declare_args() {
++  # Renode emulation only: build the "fake operational transport" -- a raw CHIP
++  # transport carrying operational (post-commissioning) messages over the same
++  # EUSART1/socket byte-pipe as the fake CHIPoBLE transport, and short-circuit
++  # chip-tool's operational address resolution to it. Lets a host chip-tool reach
++  # the emulated single-node Thread device (which has no border router / DNS-SD)
++  # for CASE + cluster commands. Do NOT enable on real hardware.
++  chip_enable_fake_operational_transport = false
++}
++
+ buildconfig_header("chip_buildconfig") {
+   header = "CHIPBuildConfig.h"
+   header_dir = "core"
+@@ -73,6 +83,7 @@ buildconfig_header("chip_buildconfig") {
+     "CHIP_CONFIG_TEST_GOOGLETEST=${chip_build_tests_googletest}",
+     "CHIP_CONFIG_MRP_ANALYTICS_ENABLED=${chip_enable_mrp_analytics}",
+     "CHIP_CONFIG_USE_ENDPOINT_UNIQUE_ID=${chip_enable_endpoint_unique_id}",
++    "CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT=${chip_enable_fake_operational_transport}",
+   ]
+ 
+   visibility = [ ":chip_config_header" ]
+diff --git a/src/platform/Linux/ble/FakeBleTransport.cpp b/src/platform/Linux/ble/FakeBleTransport.cpp
+index 579e272ccb..0f79763c07 100644
+--- a/src/platform/Linux/ble/FakeBleTransport.cpp
++++ b/src/platform/Linux/ble/FakeBleTransport.cpp
+@@ -26,12 +26,17 @@
+ #include <cerrno>
+ #include <cstdlib>
+ #include <cstring>
++#include <mutex>
+ #include <thread>
+ 
+ #include <lib/support/CodeUtils.h>
+ #include <lib/support/logging/CHIPLogging.h>
+ #include <platform/PlatformManager.h>
+ 
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++#include <transport/raw/FakeOperational.h>
++#endif
++
+ namespace chip {
+ namespace DeviceLayer {
+ namespace Internal {
+@@ -47,9 +52,16 @@ enum class FrameType : uint8_t
+     kSubscribe    = 0x04,
+     kUnsubscribe  = 0x05,
+     kIndication   = 0x06,
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++    // Operational (post-commissioning) CHIP messages carried over the SAME pipe, demuxed by this
++    // leading type byte. Payloads (CASE Sigma2/3 with certs) can be up to ~1500 bytes, much larger
++    // than BLE fragments -- see kMaxFramePayload below.
++    kOperational = 0x10,
++#endif
+ };
+ 
+-constexpr uint16_t kMaxFramePayload = 512;
++// Operational CASE payloads can be up to ~1500 bytes, so the receive buffer must be at least 1536.
++constexpr uint16_t kMaxFramePayload = 1536;
+ // The fake transport only ever talks to a single peer; use a fixed non-null connection object.
+ // BLE_CONNECTION_OBJECT is a typed pointer (BluezConnection*) on the Linux platform, so use that
+ // type directly rather than void* (which does not implicitly convert at the BleLayer call sites).
+@@ -59,8 +71,14 @@ int gSocketFd            = -1;
+ Ble::BleLayer * gBleLayer = nullptr;
+ std::thread * gRxThread   = nullptr;
+ 
++// Serializes frame writes to the shared socket. The BLE write/indication path and the operational
++// send path (FakeOperationalSend) can both write frames, so guard the two-part [header][payload]
++// write so frames never interleave on the wire.
++std::mutex gWriteMutex;
++
+ bool SendFrame(FrameType type, const uint8_t * payload, uint16_t len)
+ {
++    std::lock_guard<std::mutex> lock(gWriteMutex);
+     if (gSocketFd < 0)
+     {
+         return false;
+@@ -77,6 +95,25 @@ bool SendFrame(FrameType type, const uint8_t * payload, uint16_t len)
+     return true;
+ }
+ 
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++// Registered with Transport::FakeOperational::SetPlatformSend(). Frames the raw CHIP operational
++// packet as [0x10][len LE][payload] and writes it to the SAME connected socket the fake-BLE
++// transport uses.
++void FakeOperationalSend(const uint8_t * data, size_t len)
++{
++    if (len > kMaxFramePayload)
++    {
++        ChipLogError(Ble, "FakeBleTransport: operational payload too large (%u > %u)", static_cast<unsigned>(len),
++                     kMaxFramePayload);
++        return;
++    }
++    if (!SendFrame(FrameType::kOperational, data, static_cast<uint16_t>(len)))
++    {
++        ChipLogError(Ble, "FakeBleTransport: failed to send operational frame");
++    }
++}
++#endif // CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++
+ bool BlockingReadExact(uint8_t * buf, size_t length)
+ {
+     size_t received = 0;
+@@ -129,6 +166,28 @@ void RxThreadMain()
+                     reinterpret_cast<intptr_t>(std::move(buf).UnsafeRelease())));
+             }
+         }
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++        else if (type == FrameType::kOperational)
++        {
++            System::PacketBufferHandle buf = System::PacketBufferHandle::NewWithData(payload, len, 0, 0);
++            if (!buf.IsNull())
++            {
++                // OnMessageReceived must run on the CHIP event-loop thread with the stack lock; marshal
++                // it there via ScheduleWork rather than calling it from this raw RX thread.
++                LogErrorOnFailure(DeviceLayer::PlatformMgr().ScheduleWork(
++                    [](intptr_t ctx) {
++                        System::PacketBufferHandle b =
++                            System::PacketBufferHandle::Adopt(reinterpret_cast<System::PacketBuffer *>(ctx));
++                        auto * op = Transport::FakeOperational::Instance();
++                        if (op != nullptr)
++                        {
++                            op->OnMessageReceived(std::move(b));
++                        }
++                    },
++                    reinterpret_cast<intptr_t>(std::move(buf).UnsafeRelease())));
++            }
++        }
++#endif // CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
+     }
+ 
+     ChipLogProgress(Ble, "FakeBleTransport: peer connection closed");
+@@ -190,7 +249,19 @@ void FakeBleConnectionDelegate::NewConnection(Ble::BleLayer * bleLayer, void * a
+ 
+     gSocketFd  = fd;
+     gBleLayer  = bleLayer;
+-    gRxThread  = new std::thread(RxThreadMain);
++
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++    // Register the operational byte-pipe writer once. The operational transport shares this same
++    // socket, demuxed by the leading frame-type byte.
++    static bool sOperationalSendRegistered = false;
++    if (!sOperationalSendRegistered)
++    {
++        Transport::FakeOperational::SetPlatformSend(&FakeOperationalSend);
++        sOperationalSendRegistered = true;
++    }
++#endif // CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++
++    gRxThread = new std::thread(RxThreadMain);
+ 
+     if (!SendFrame(FrameType::kConnect, nullptr, 0))
+     {
+@@ -246,12 +317,23 @@ CHIP_ERROR FakeBlePlatformDelegate::UnsubscribeCharacteristic(BLE_CONNECTION_OBJ
+ 
+ CHIP_ERROR FakeBlePlatformDelegate::CloseConnection(BLE_CONNECTION_OBJECT /* connObj */)
+ {
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++    // After ThreadNetworkEnable, chip-tool tears down the BLE connection but then needs the
++    // operational transport over the SAME pipe. Keep the underlying socket open (and do not tell the
++    // device to tear down its pipe) so operational CHIP messages can continue to flow. The socket is
++    // kept alive for the process lifetime (or until the peer closes it / the RX thread ends).
++    ChipLogProgress(Ble, "FakeBleTransport: BLE connection closed; keeping socket open for operational transport");
++#else
+     SendFrame(FrameType::kDisconnect, nullptr, 0);
+-    if (gSocketFd >= 0)
+     {
+-        close(gSocketFd);
+-        gSocketFd = -1;
++        std::lock_guard<std::mutex> lock(gWriteMutex);
++        if (gSocketFd >= 0)
++        {
++            close(gSocketFd);
++            gSocketFd = -1;
++        }
+     }
++#endif // CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
+     return CHIP_NO_ERROR;
+ }
+ 
+diff --git a/src/platform/silabs/efr32/FakeBLETransport.cpp b/src/platform/silabs/efr32/FakeBLETransport.cpp
+index 4fa4f97250..8ad00b1ef6 100644
+--- a/src/platform/silabs/efr32/FakeBLETransport.cpp
++++ b/src/platform/silabs/efr32/FakeBLETransport.cpp
+@@ -44,6 +44,9 @@
+ #include <cmsis_os2.h>
+ #include <lib/support/CodeUtils.h>
+ #include <lib/support/logging/CHIPLogging.h>
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++#include <transport/raw/FakeOperational.h> // nogncheck
++#endif
+ 
+ using namespace chip::Ble;
+ using namespace chip::System;
+@@ -70,6 +73,18 @@ enum class FrameType : uint8_t
+ 
+ constexpr uint16_t kMaxFramePayload = 512;
+ 
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++// Operational frames (CASE Sigma2/3, Invoke) share this pipe under a distinct type byte.
++// They can be much larger than a BLE fragment, so the frame buffer must accommodate a full
++// CHIP message (<= IPv6 MTU-ish). It is file-scope static because it is too large for the
++// FakeBLE task stack (2 KB).
++constexpr uint8_t kFakeOpFrameType    = 0x10;
++constexpr uint16_t kMaxFrameBufSize   = 1536;
++#else
++constexpr uint16_t kMaxFrameBufSize = kMaxFramePayload;
++#endif
++uint8_t sFrameBuf[kMaxFrameBufSize];
++
+ // Second UARTDRV instance, hand-instantiated (no SLC-generated config): EUSART1 is unused by
+ // every board this test setup targets, and pin routing is irrelevant since this only ever
+ // runs against Renode's register-level EUSART model, never real silicon.
+@@ -125,39 +140,114 @@ constexpr osThreadAttr_t kFakeBleTaskAttr = {
+     .priority   = osPriorityHigh,
+ };
+ 
+-// Blocking read of exactly `length` bytes. UARTDRV's callback-based Receive() is overkill for a
+-// test harness talking to a reliable local socket-backed UART -- poll instead.
++// Completion flag for the non-blocking receive below. Set from the UARTDRV DMA-completion
++// callback (ISR context), cleared before each new receive. `volatile` because it is written
++// from the callback and spun-on from task context.
++volatile bool sFakeBleRxComplete = false;
++
++void FakeBleRxCallback(UARTDRV_Handle_t handle, Ecode_t status, uint8_t * data, UARTDRV_Count_t count)
++{
++    (void) handle;
++    (void) status;
++    (void) data;
++    (void) count;
++    sFakeBleRxComplete = true;
++}
++
++// Blocking read of exactly `length` bytes -- but implemented on top of the NON-blocking
++// UARTDRV_Receive() so the task genuinely SLEEPS (osDelay) while waiting for bytes.
++//
++// The earlier implementation used UARTDRV_ReceiveB() (the *blocking* variant), on the mistaken
++// assumption that under Renode it returns immediately when no bytes are queued. It does NOT:
++// ReceiveB starts a DMA and busy-spins internally on the transfer's remaining-count until all
++// `length` bytes arrive, never yielding. At osPriorityHigh that spin starves the lower-priority
++// OpenThread task (prio 24), so when commissioning reaches ThreadNetworkEnable -- where the
++// device must run OpenThread in the background to attach while chip-tool waits silently for the
++// ConnectNetwork response -- OpenThread never gets CPU, never attaches, and the command times out.
++//
++// With the non-blocking Receive + osDelay(1) poll, this task blocks between polls, so OpenThread
++// (and the Matter event loop) run freely; incoming frames still preempt promptly (this task stays
++// osPriorityHigh) so the EUSART RX FIFO is drained without overflow.
+ void BlockingRead(uint8_t * buf, uint16_t length)
+ {
+-    while (UARTDRV_ReceiveB(sFakeBleUartHandle, buf, static_cast<UARTDRV_Count_t>(length)) != ECODE_EMDRV_UARTDRV_OK)
++    sFakeBleRxComplete = false;
++
++    while (UARTDRV_Receive(sFakeBleUartHandle, buf, static_cast<UARTDRV_Count_t>(length), FakeBleRxCallback) !=
++           ECODE_EMDRV_UARTDRV_OK)
++    {
++        // Queue momentarily full/busy -- yield and retry.
++        osDelay(1);
++    }
++
++    while (!sFakeBleRxComplete)
+     {
+-        // Retry: the fake transport is a test harness, not a real-time path.
+-        // Yield so lower-priority tasks can run. This task is osPriorityRealtime6 and under Renode
+-        // UARTDRV_ReceiveB returns immediately when no bytes are queued, so without a yield this
+-        // busy-poll starves the Matter/CHIP event-loop task -- which must run to dispatch the
+-        // CHIPoBLE write we posted and generate the BTP handshake response. Starving it stalls
+-        // commissioning at the BLE handshake.
++        // Sleep while the DMA fills `buf`. This is the critical yield: it lets OpenThread and the
++        // Matter event loop run while no CHIPoBLE bytes are pending.
+         osDelay(1);
+     }
+ }
+ 
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++// Runs on the Matter/CHIP event-loop thread (scheduled from the RX task) so the message is
++// dispatched with the stack lock held, exactly like a UDP packet would be.
++void DeliverFakeOperationalWork(intptr_t arg)
++{
++    auto buf         = System::PacketBufferHandle::Adopt(reinterpret_cast<System::PacketBuffer *>(arg));
++    auto * transport = Transport::FakeOperational::Instance();
++    if (transport != nullptr)
++    {
++        transport->OnMessageReceived(std::move(buf));
++    }
++}
++
++// Called from the RX task: copy a received operational packet into a PacketBuffer and marshal
++// it onto the Matter thread (the RX task is not the Matter thread).
++void DeliverFakeOperational(const uint8_t * data, uint16_t len)
++{
++    System::PacketBufferHandle buf = System::PacketBufferHandle::NewWithData(data, len);
++    VerifyOrReturn(!buf.IsNull(), ChipLogError(DeviceLayer, "FakeOp: OOM on RX (%u bytes)", len));
++    System::PacketBuffer * raw = std::move(buf).UnsafeRelease();
++    TEMPORARY_RETURN_IGNORED PlatformMgr().ScheduleWork(DeliverFakeOperationalWork, reinterpret_cast<intptr_t>(raw));
++}
++
++// Platform byte-pipe writer for the operational transport. Runs on the Matter thread (from
++// SessionManager::SendMessage -> FakeOperational::SendMessage). Frames [0x10][len LE][payload]
++// onto the same EUSART1 pipe that carries the fake-BLE frames.
++void FakeOperationalSend(const uint8_t * data, size_t len)
++{
++    uint8_t header[3];
++    header[0] = kFakeOpFrameType;
++    header[1] = static_cast<uint8_t>(len & 0xFF);
++    header[2] = static_cast<uint8_t>((len >> 8) & 0xFF);
++    UARTDRV_ForceTransmit(sFakeBleUartHandle, header, sizeof(header));
++    UARTDRV_ForceTransmit(sFakeBleUartHandle, const_cast<uint8_t *>(data), static_cast<UARTDRV_Count_t>(len));
++}
++#endif // CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++
+ void FakeBLETransportTaskMain(void * arg)
+ {
+     uint8_t header[3];
+-    uint8_t payload[kMaxFramePayload];
+ 
+     while (true)
+     {
+         BlockingRead(header, sizeof(header));
+         uint8_t type   = header[0];
+         uint16_t plen  = static_cast<uint16_t>(header[1]) | (static_cast<uint16_t>(header[2]) << 8);
+-        VerifyOrDie(plen <= kMaxFramePayload);
++        VerifyOrDie(plen <= sizeof(sFrameBuf));
+         if (plen > 0)
+         {
+-            BlockingRead(payload, plen);
++            BlockingRead(sFrameBuf, plen);
++        }
++
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++        if (type == kFakeOpFrameType)
++        {
++            DeliverFakeOperational(sFrameBuf, plen);
++            continue;
+         }
++#endif
+ 
+-        BLEMgrImpl().FakeBLEHandleFrame(type, payload, plen);
++        BLEMgrImpl().FakeBLEHandleFrame(type, sFrameBuf, plen);
+     }
+ }
+ 
+@@ -172,6 +262,13 @@ void BLEManagerImpl::InitFakeBLETransport(void)
+ 
+     UARTDRV_InitEuart(sFakeBleUartHandle, &sFakeBleUartInit);
+ 
++#if CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT
++    // Register the byte-pipe writer for the operational transport (its instance is created by
++    // the Matter server's ServerTransportMgr). Both flows share this EUSART1 pipe, demuxed by
++    // the leading frame-type byte (0x10 = operational).
++    Transport::FakeOperational::SetPlatformSend(&FakeOperationalSend);
++#endif
++
+     sFakeBleTaskHandle = osThreadNew(FakeBLETransportTaskMain, nullptr, &kFakeBleTaskAttr);
+     VerifyOrDie(sFakeBleTaskHandle != nullptr);
+ 
+diff --git a/src/transport/raw/BUILD.gn b/src/transport/raw/BUILD.gn
+index c36cd652ac..89c7d94e96 100644
+--- a/src/transport/raw/BUILD.gn
++++ b/src/transport/raw/BUILD.gn
+@@ -26,6 +26,11 @@ static_library("raw") {
+ 
+   sources = [
+     "Base.h",
++    # Renode emulation transport: compiled unconditionally but dormant unless it
++    # is registered into a TransportMgr tuple (gated by
++    # CHIP_ENABLE_FAKE_OPERATIONAL_TRANSPORT) and its platform send is registered.
++    "FakeOperational.cpp",
++    "FakeOperational.h",
+     "GroupcastTesting.cpp",
+     "GroupcastTesting.h",
+     "MessageHeader.cpp",
+diff --git a/src/transport/raw/FakeOperational.cpp b/src/transport/raw/FakeOperational.cpp
+new file mode 100644
+index 0000000000..f4b6b00dd2
+--- /dev/null
++++ b/src/transport/raw/FakeOperational.cpp
+@@ -0,0 +1,28 @@
++/*
++ *
++ *    Copyright (c) 2026 Project CHIP Authors
++ *    All rights reserved.
++ *
++ *    Licensed under the Apache License, Version 2.0 (the "License");
++ *    you may not use this file except in compliance with the License.
++ *    You may obtain a copy of the License at
++ *
++ *        http://www.apache.org/licenses/LICENSE-2.0
++ *
++ *    Unless required by applicable law or agreed to in writing, software
++ *    distributed under the License is distributed on an "AS IS" BASIS,
++ *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ *    See the License for the specific language governing permissions and
++ *    limitations under the License.
++ */
++
++#include <transport/raw/FakeOperational.h>
++
++namespace chip {
++namespace Transport {
++
++FakeOperational * FakeOperational::sInstance     = nullptr;
++FakeOperationalSendFn FakeOperational::sSendFn   = nullptr;
++
++} // namespace Transport
++} // namespace chip
+diff --git a/src/transport/raw/FakeOperational.h b/src/transport/raw/FakeOperational.h
+new file mode 100644
+index 0000000000..9f8adc9896
+--- /dev/null
++++ b/src/transport/raw/FakeOperational.h
+@@ -0,0 +1,129 @@
++/*
++ *
++ *    Copyright (c) 2026 Project CHIP Authors
++ *    All rights reserved.
++ *
++ *    Licensed under the Apache License, Version 2.0 (the "License");
++ *    you may not use this file except in compliance with the License.
++ *    You may obtain a copy of the License at
++ *
++ *        http://www.apache.org/licenses/LICENSE-2.0
++ *
++ *    Unless required by applicable law or agreed to in writing, software
++ *    distributed under the License is distributed on an "AS IS" BASIS,
++ *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ *    See the License for the specific language governing permissions and
++ *    limitations under the License.
++ */
++
++/**
++ *    @file
++ *      RENODE EMULATION ONLY. A raw CHIP transport that carries OPERATIONAL
++ *      (post-commissioning) Matter messages over a simple byte-pipe instead of
++ *      UDP-over-Thread. It exists because the emulated single-node Thread device
++ *      has no border router / SRP server / DNS-SD path the host can reach, so
++ *      chip-tool's normal operational discovery + CASE-over-UDP cannot complete.
++ *
++ *      This mirrors the "fake CHIPoBLE transport" used for commissioning, but for
++ *      the operational path. Both directions frame a CHIP message packet as
++ *      [0x10][2B len LE][payload] on the SAME EUSART1/socket pipe that carries the
++ *      fake-BLE frames (demuxed by the leading type byte). The actual byte I/O is
++ *      supplied per-platform via FakeOperationalPlatformSend() (device = SiLabs
++ *      FakeBLETransport.cpp UARTDRV; host = Linux FakeBleTransport.cpp socket).
++ *
++ *      Routing is keyed on PeerAddress Type::kFakeOperational. Because the pipe is
++ *      lossless (like TCP), MRP is left disabled for this type (see
++ *      SecureSession::AllowsMRP); each CASE/Invoke response implicitly acks.
++ */
++
++#pragma once
++
++#include <lib/core/CHIPCore.h>
++#include <lib/support/DLLUtil.h>
++#include <system/SystemPacketBuffer.h>
++#include <transport/raw/Base.h>
++#include <transport/raw/PeerAddress.h>
++
++#include <cstddef>
++#include <cstdint>
++
++namespace chip {
++namespace Transport {
++
++/**
++ * Platform-provided byte-pipe writer, registered at boot via
++ * FakeOperational::SetPlatformSend(). Frames `data`/`len` as an operational
++ * packet and pushes it out the shared pipe (device = SiLabs FakeBLETransport.cpp
++ * UARTDRV; host = Linux FakeBleTransport.cpp socket).
++ */
++typedef void (*FakeOperationalSendFn)(const uint8_t * data, size_t len);
++
++/** Listen parameters (none needed; the pipe is platform-owned). */
++class FakeOperationalListenParameters
++{
++public:
++    FakeOperationalListenParameters()                                        = default;
++    FakeOperationalListenParameters(const FakeOperationalListenParameters &) = default;
++    FakeOperationalListenParameters(FakeOperationalListenParameters &&)      = default;
++};
++
++class DLL_EXPORT FakeOperational : public Base
++{
++public:
++    FakeOperational() {}
++    ~FakeOperational() override { Close(); }
++
++    CHIP_ERROR Init(const FakeOperationalListenParameters &)
++    {
++        sInstance = this;
++        return CHIP_NO_ERROR;
++    }
++
++    void Close() override
++    {
++        if (sInstance == this)
++        {
++            sInstance = nullptr;
++        }
++    }
++
++    CHIP_ERROR SendMessage(const Transport::PeerAddress & address, System::PacketBufferHandle && msgBuf) override
++    {
++        VerifyOrReturnError(address.GetTransportType() == Type::kFakeOperational, CHIP_ERROR_INVALID_ARGUMENT);
++        VerifyOrReturnError(sSendFn != nullptr, CHIP_ERROR_INCORRECT_STATE);
++        VerifyOrReturnError(!msgBuf.IsNull(), CHIP_ERROR_INVALID_ARGUMENT);
++        // These operational packets are small and single-buffer; no chained handling needed.
++        VerifyOrReturnError(!msgBuf->HasChainedBuffer(), CHIP_ERROR_INVALID_MESSAGE_LENGTH);
++        sSendFn(msgBuf->Start(), static_cast<size_t>(msgBuf->DataLength()));
++        return CHIP_NO_ERROR;
++    }
++
++    bool CanSendToPeer(const Transport::PeerAddress & address) override
++    {
++        return address.GetTransportType() == Type::kFakeOperational;
++    }
++
++    /**
++     * Deliver a received operational packet up the stack. MUST be called on the
++     * Matter/CHIP event-loop thread (platforms marshal onto it before calling).
++     */
++    void OnMessageReceived(System::PacketBufferHandle && buffer)
++    {
++        HandleMessageReceived(PeerAddress(Type::kFakeOperational), std::move(buffer));
++    }
++
++    /// Register the platform byte-pipe writer. Call once at boot.
++    static void SetPlatformSend(FakeOperationalSendFn fn) { sSendFn = fn; }
++
++    /// The fixed synthetic peer address for the single emulated operational peer.
++    static PeerAddress PeerAddr() { return PeerAddress(Type::kFakeOperational); }
++
++    static FakeOperational * Instance() { return sInstance; }
++
++private:
++    static FakeOperational * sInstance;
++    static FakeOperationalSendFn sSendFn;
++};
++
++} // namespace Transport
++} // namespace chip
+diff --git a/src/transport/raw/PeerAddress.h b/src/transport/raw/PeerAddress.h
+index dd6a56ee86..36dd5c5dcd 100644
+--- a/src/transport/raw/PeerAddress.h
++++ b/src/transport/raw/PeerAddress.h
+@@ -57,7 +57,9 @@ enum class Type : uint8_t
+     kWiFiPAF,
+     kNfc,
+     kThreadMeshcop,
+-    kLast = kThreadMeshcop, // This is not an actual transport type, it just refers to the last transport type
++    kFakeOperational, // Renode emulation only: operational CHIP messages over a socket byte-pipe
++                      // (no UDP/Thread/DNS-SD). See src/transport/raw/FakeOperational.h.
++    kLast = kFakeOperational, // This is not an actual transport type, it just refers to the last transport type
+ };
+ 
+ /**
+@@ -185,6 +187,9 @@ public:
+         case Type::kNfc:
+             snprintf(buf, bufSize, "NFC:%d", mId.mNFCShortId);
+             break;
++        case Type::kFakeOperational:
++            snprintf(buf, bufSize, "FAKE-OP");
++            break;
+         case Type::kThreadMeshcop:
+             mIPAddress.ToString(ip_addr);
+ #if INET_CONFIG_ENABLE_IPV4
+diff --git a/third_party/openthread/platforms/efr32/BUILD.gn b/third_party/openthread/platforms/efr32/BUILD.gn
+index d1052984e6..2fa99c3035 100644
+--- a/third_party/openthread/platforms/efr32/BUILD.gn
++++ b/third_party/openthread/platforms/efr32/BUILD.gn
+@@ -21,6 +21,17 @@ import("//build_overrides/openthread.gni")
+ import("${silabs_sdk_build_root}/efr32_sdk.gni")
+ import("${silabs_sdk_build_root}/silabs_board.gni")
+ 
++declare_args() {
++  # Renode "null radio": swap the real RAIL-backed radio.cpp for a benign fake
++  # (radio_fake.cpp) that never touches RAIL. With no RX ever delivered,
++  # OpenThread's MLE attach times out and the device self-promotes to Leader,
++  # forming a single-node Thread network. For emulation only -- do NOT enable
++  # for real hardware. The sibling radio_*.cpp files in this source_set are
++  # still compiled; radio_fake.cpp only replaces radio.cpp and additionally
++  # provides the handful of radio.cpp-internal helpers those siblings call.
++  chip_enable_fake_thread_radio = false
++}
++
+ config("openthread_efr32_config") {
+   defines = [
+     "RADIO_CONFIG_DMP_SUPPORT=1",
+@@ -80,11 +91,17 @@ source_set("libopenthread-efr32") {
+     "${sl_ot_efr32_root}/sleep.c",
+     "${sl_ot_efr32_root}/soft_source_match_table.c",
+     "${sl_ot_efr32_root}/system.c",
+-
+-    # Temporary file until the files in the SI SDK is fixed
+-    "${matter_support_root}/sdk-copies/openthread/platform-abstraction/efr32/radio.cpp",
+   ]
+ 
++  # Temporary file until the files in the SI SDK is fixed.
++  # Under the Renode "null radio" flag, swap it for radio_fake.cpp (see the
++  # chip_enable_fake_thread_radio declare_args above).
++  if (chip_enable_fake_thread_radio) {
++    sources += [ "${matter_support_root}/sdk-copies/openthread/platform-abstraction/efr32/radio_fake.cpp" ]
++  } else {
++    sources += [ "${matter_support_root}/sdk-copies/openthread/platform-abstraction/efr32/radio.cpp" ]
++  }
++
+   include_dirs = [ "${openthread_root}/examples/platforms/utils" ]
+ 
+   public_deps = [
