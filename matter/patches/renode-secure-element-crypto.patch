@@ -1,5 +1,5 @@
 diff --git a/src/Emulator/Peripherals/Peripherals/Miscellaneous/SiLabs/SiLabs_SecureElement.cs b/src/Emulator/Peripherals/Peripherals/Miscellaneous/SiLabs/SiLabs_SecureElement.cs
-index 78175b71b..f2d0c05ce 100644
+index 78175b71b..882bdca67 100644
 --- a/src/Emulator/Peripherals/Peripherals/Miscellaneous/SiLabs/SiLabs_SecureElement.cs
 +++ b/src/Emulator/Peripherals/Peripherals/Miscellaneous/SiLabs/SiLabs_SecureElement.cs
 @@ -24,6 +24,7 @@
@@ -91,17 +91,20 @@ index 78175b71b..f2d0c05ce 100644
              switch(commandId)
              {
              case CommandId.CreateKey:
-@@ -158,6 +185,9 @@ private void ProcessCommand()
+@@ -158,6 +185,12 @@ private void ProcessCommand()
              case CommandId.ReadPublicKey:
                  responseCode = HandleReadPublicKeyCommand(inputDmaDescriptorPtr, outputDmaDescriptorPtr, commandParams, commandParamsCount);
                  break;
 +            case CommandId.SignatureSign:
 +                responseCode = HandleSignatureSignCommand(inputDmaDescriptorPtr, outputDmaDescriptorPtr, commandParams, commandParamsCount, commandOptions);
 +                break;
++            case CommandId.SignatureVerify:
++                responseCode = HandleSignatureVerifyCommand(inputDmaDescriptorPtr, outputDmaDescriptorPtr, commandParams, commandParamsCount, commandOptions);
++                break;
              case CommandId.ImportKey:
                  responseCode = HandleImportKeyCommand(inputDmaDescriptorPtr, outputDmaDescriptorPtr, commandParams, commandParamsCount);
                  break;
-@@ -174,6 +204,9 @@ private void ProcessCommand()
+@@ -174,6 +207,9 @@ private void ProcessCommand()
              case CommandId.HashFinish:
                  responseCode = HandleHashUpdateOrFinishCommand(inputDmaDescriptorPtr, outputDmaDescriptorPtr, commandParams, commandParamsCount, commandOptions, (commandId == CommandId.HashFinish));
                  break;
@@ -111,7 +114,7 @@ index 78175b71b..f2d0c05ce 100644
              case CommandId.AesEncrypt:
              case CommandId.AesDecrypt:
                  responseCode = HandleAesEncryptOrDecryptCommand(inputDmaDescriptorPtr, outputDmaDescriptorPtr, commandParams, commandParamsCount, commandOptions, (commandId == CommandId.AesEncrypt));
-@@ -182,10 +215,10 @@ private void ProcessCommand()
+@@ -182,10 +218,10 @@ private void ProcessCommand()
                  responseCode = HandleAesCmacCommand(inputDmaDescriptorPtr, outputDmaDescriptorPtr, commandParams, commandParamsCount);
                  break;
              case CommandId.AesCcmEncrypt:
@@ -124,7 +127,7 @@ index 78175b71b..f2d0c05ce 100644
                  break;
              case CommandId.AesGcmEncrypt:
                  responseCode = HandleAesGcmEncryptCommand(inputDmaDescriptorPtr, outputDmaDescriptorPtr, commandParams, commandParamsCount, commandOptions);
-@@ -234,6 +267,13 @@ private void ProcessCommand()
+@@ -234,6 +270,13 @@ private void ProcessCommand()
                  parent.Log(LogLevel.Error, "ProcessCommand(): Command ID 0x{0:X} not handled!", (uint)commandId);
                  break;
              }
@@ -138,7 +141,7 @@ index 78175b71b..f2d0c05ce 100644
  
              if(responseCode != ResponseCode.Ok)
              {
-@@ -243,6 +283,18 @@ private void ProcessCommand()
+@@ -243,6 +286,18 @@ private void ProcessCommand()
              WriteResponse(responseCode, commandHandle);
          }
  
@@ -157,7 +160,7 @@ index 78175b71b..f2d0c05ce 100644
          private void WriteResponse(ResponseCode code, uint commandHandle)
          {
              rxFifo.Enqueue((uint)code);
-@@ -706,10 +758,20 @@ private ResponseCode HandleHashUpdateOrFinishCommand(uint inputDma, uint outputD
+@@ -706,10 +761,20 @@ private ResponseCode HandleHashUpdateOrFinishCommand(uint inputDma, uint outputD
                  return ResponseCode.Abort;
              }
  
@@ -181,7 +184,7 @@ index 78175b71b..f2d0c05ce 100644
              }
  
              hashEngine.BlockUpdate(payload, 0, (int)inputPayloadLength);
-@@ -723,12 +785,11 @@ private ResponseCode HandleHashUpdateOrFinishCommand(uint inputDma, uint outputD
+@@ -723,12 +788,11 @@ private ResponseCode HandleHashUpdateOrFinishCommand(uint inputDma, uint outputD
                  }
                  byte[] output = new byte[outputLength];
                  hashEngine.DoFinal(output, 0);
@@ -195,7 +198,7 @@ index 78175b71b..f2d0c05ce 100644
                  parent.Log(LogLevel.Noisy, "Digest=[{0}]", BitConverter.ToString(output));
                  WriteToRam(output, 0, outputDescriptorPtr, outputLength);
              }
-@@ -752,6 +813,93 @@ private ResponseCode HandleHashUpdateOrFinishCommand(uint inputDma, uint outputD
+@@ -752,6 +816,93 @@ private ResponseCode HandleHashUpdateOrFinishCommand(uint inputDma, uint outputD
              return ResponseCode.Ok;
          }
  
@@ -289,7 +292,7 @@ index 78175b71b..f2d0c05ce 100644
          private ResponseCode HandleAesCmacCommand(uint inputDma, uint outputDma, uint[] commandParams, uint commandParamsCount)
          {
              if(commandParamsCount != 2)
-@@ -905,6 +1053,226 @@ private ResponseCode HandleExportKeyCommand(uint inputDma, uint outputDma, uint[
+@@ -905,6 +1056,225 @@ private ResponseCode HandleExportKeyCommand(uint inputDma, uint outputDma, uint[
              return ResponseCode.InvalidParameter;
          }
  
@@ -482,7 +485,6 @@ index 78175b71b..f2d0c05ce 100644
 +                    if(e is InvalidCipherTextException) { result = ResponseCode.CryptoError; }
 +                    else { throw; }
 +                }
-+
 +                if(fLen > 0)
 +                {
 +                    uint oPtr, oLen; UnpackDmaDescriptor(outputDma, out oPtr, out oLen, out opt, out next, machine);
@@ -516,7 +518,7 @@ index 78175b71b..f2d0c05ce 100644
          private ResponseCode HandleAesCcmEncryptCommand(uint inputDma, uint outputDma, uint[] commandParams, uint commandParamsCount)
          {
              if(commandParamsCount != 4)
-@@ -971,28 +1339,38 @@ private ResponseCode HandleAesCcmEncryptCommand(uint inputDma, uint outputDma, u
+@@ -971,28 +1341,38 @@ private ResponseCode HandleAesCcmEncryptCommand(uint inputDma, uint outputDma, u
              FetchFromRam(aadPtr, aad, 0, aadLength);
              parent.Log(LogLevel.Noisy, "Aad=[{0}]", BitConverter.ToString(aad));
  
@@ -574,7 +576,7 @@ index 78175b71b..f2d0c05ce 100644
                       outputTagPtr, outputTagLength, transferOptions, nextDescriptorPtr);
  
              CcmBlockCipher cipher = new CcmBlockCipher(new AesEngine());
-@@ -1631,8 +2009,7 @@ private ResponseCode HandleAesCcmDecryptCommand(uint inputDma, uint outputDma, u
+@@ -1631,8 +2011,7 @@ private ResponseCode HandleAesCcmDecryptCommand(uint inputDma, uint outputDma, u
              uint nonceSize = (commandParams[1] >> 16) & 0xFFFF;
              uint associatedAuthenticatedDataSize = commandParams[2];
              uint inputDataSize = commandParams[3];
@@ -584,7 +586,7 @@ index 78175b71b..f2d0c05ce 100644
  
              if(!IsTagSizeValid(tagSize) || !IsNonceSizeValid(nonceSize))
              {
-@@ -1678,14 +2055,20 @@ private ResponseCode HandleAesCcmDecryptCommand(uint inputDma, uint outputDma, u
+@@ -1678,14 +2057,20 @@ private ResponseCode HandleAesCcmDecryptCommand(uint inputDma, uint outputDma, u
              FetchFromRam(aadPtr, aad, 0, aadLength);
              parent.Log(LogLevel.Noisy, "Aad=[{0}]", BitConverter.ToString(aad));
  
@@ -612,7 +614,7 @@ index 78175b71b..f2d0c05ce 100644
              uint tagPtr;
              uint tagLength;
              UnpackDmaDescriptor(nextDescriptorPtr, out tagPtr, out tagLength, out transferOptions, out nextDescriptorPtr, machine);
-@@ -1697,14 +2080,17 @@ private ResponseCode HandleAesCcmDecryptCommand(uint inputDma, uint outputDma, u
+@@ -1697,14 +2082,17 @@ private ResponseCode HandleAesCcmDecryptCommand(uint inputDma, uint outputDma, u
              FetchFromRam(tagPtr, inputDataAndTag, inputDataLength, tagLength);
              parent.Log(LogLevel.Noisy, "InputDataAndTag=[{0}]", BitConverter.ToString(inputDataAndTag));
  
@@ -637,7 +639,7 @@ index 78175b71b..f2d0c05ce 100644
              CcmBlockCipher cipher = new CcmBlockCipher(new AesEngine());
              AeadParameters parameters = new AeadParameters(keyParameter, (int)tagLength*8, nonce, aad);
              cipher.Init(false, parameters);
-@@ -2093,6 +2479,186 @@ private ResponseCode HandleReadPublicKeyCommand(uint inputDma, uint outputDma, u
+@@ -2093,6 +2481,263 @@ private ResponseCode HandleReadPublicKeyCommand(uint inputDma, uint outputDma, u
              return ResponseCode.Ok;
          }
  
@@ -821,10 +823,87 @@ index 78175b71b..f2d0c05ce 100644
 +            return ResponseCode.Ok;
 +        }
 +
++        private ResponseCode HandleSignatureVerifyCommand(uint inputDma, uint outputDma, uint[] commandParams, uint commandParamsCount, uint commandOptions)
++        {
++            // ECDSA-P256 verify (SE command 0x0601). Matter validates a root/NOC certificate's self-
++            // signature via this during AddTrustedRootCertificate / AddNOC; an unimplemented verify made
++            // the device reject AddTrustedRootCertificate with INVALID_COMMAND. params: [0]=public-key
++            // metadata, [1]=message length, [2]=signature length. inputs: auth, public key, message/digest,
++            // signature (raw r||s). No output -- the response code is Ok or InvalidSignature.
++            if(commandParamsCount < 2)
++            {
++                parent.Log(LogLevel.Error, "SIGNATURE_VERIFY: invalid parameter count {0}", commandParamsCount);
++                return ResponseCode.Abort;
++            }
++
++            KeyMode keyMode; KeyType keyType; KeyRestriction keyRestriction; uint keyIndex;
++            UnpackKeyMetadata(commandParams[0], out keyIndex, out keyType, out keyMode, out keyRestriction);
++            if(keyType != KeyType.EccWeirstrass)
++            {
++                parent.Log(LogLevel.Error, "SIGNATURE_VERIFY: KeyType={0} not supported", keyType);
++                return ResponseCode.InvalidParameter;
++            }
++            EccWeirstrassKeyMetadata wpr = UnpackWeirstrassPrimeFieldKeyMetadata(commandParams[0]);
++            uint keySize = wpr.Size;
++
++            DmaTransferOptions opt;
++            uint next = inputDma;
++            uint authPtr, authLen; UnpackDmaDescriptor(next, out authPtr, out authLen, out opt, out next, machine); // auth
++            uint pubPtr, pubLen;   UnpackDmaDescriptor(next, out pubPtr, out pubLen, out opt, out next, machine);   // public key
++            byte[] pub = new byte[pubLen]; FetchFromRam(pubPtr, pub, 0, pubLen);
++            uint msgPtr, msgLen;   UnpackDmaDescriptor(next, out msgPtr, out msgLen, out opt, out next, machine);   // message/digest
++            byte[] msg = new byte[msgLen]; FetchFromRam(msgPtr, msg, 0, msgLen);
++            uint sigPtr, sigLen;   UnpackDmaDescriptor(next, out sigPtr, out sigLen, out opt, out next, machine);   // signature r||s
++            byte[] sig = new byte[sigLen]; FetchFromRam(sigPtr, sig, 0, sigLen);
++
++            // Match the sign convention: hash the raw message (SHA-256) when the command options are set;
++            // options==0 means a precomputed digest.
++            byte[] digest;
++            if((commandOptions & 0xFFFF) != 0)
++            {
++                var verHash = new Sha256Digest();
++                verHash.BlockUpdate(msg, 0, msg.Length);
++                digest = new byte[verHash.GetDigestSize()];
++                verHash.DoFinal(digest, 0);
++            }
++            else
++            {
++                digest = msg;
++                if(msg.Length > keySize)
++                {
++                    digest = new byte[keySize];
++                    Array.Copy(msg, 0, digest, 0, (int)keySize);
++                }
++            }
++
++            if(sig.Length < keySize * 2 || pub.Length < keySize * 2)
++            {
++                parent.Log(LogLevel.Error, "SIGNATURE_VERIFY: short pub/sig (pub={0} sig={1} keySize={2})", pub.Length, sig.Length, keySize);
++                return ResponseCode.InvalidParameter;
++            }
++
++            // Public key: X||Y (each keySize), optionally with a leading 0x04 uncompressed-point prefix.
++            int pubOff = (pub.Length == keySize * 2 + 1 && pub[0] == 0x04) ? 1 : 0;
++            byte[] pxB = new byte[keySize]; Array.Copy(pub, pubOff, pxB, 0, (int)keySize);
++            byte[] pyB = new byte[keySize]; Array.Copy(pub, pubOff + (int)keySize, pyB, 0, (int)keySize);
++            byte[] rB = new byte[keySize]; Array.Copy(sig, 0, rB, 0, (int)keySize);
++            byte[] sB = new byte[keySize]; Array.Copy(sig, (int)keySize, sB, 0, (int)keySize);
++
++            ECDomainParameters domainParams = GetECDomainParametersFromKeyLength(keySize * 8);
++            ECPoint q = domainParams.Curve.CreatePoint(new BigInteger(1, pxB), new BigInteger(1, pyB));
++            ECPublicKeyParameters pubParam = new ECPublicKeyParameters(q, domainParams);
++
++            ECDsaSigner verifier = new ECDsaSigner();
++            verifier.Init(false, pubParam);
++            bool valid = verifier.VerifySignature(digest, new BigInteger(1, rB), new BigInteger(1, sB));
++            parent.Log(LogLevel.Noisy, "SIGNATURE_VERIFY: keySize={0} msgLen={1} valid={2}", keySize, msgLen, valid);
++            return valid ? ResponseCode.Ok : ResponseCode.InvalidSignature;
++        }
++
          private ResponseCode HandleDiffieHellmanCommand(uint inputDma, uint outputDma, uint[] commandParams, uint commandParamsCount)
          {
              if(commandParamsCount != 2)
-@@ -3753,6 +4319,10 @@ private uint GetInitialDataSpaceLength
+@@ -3753,6 +4398,10 @@ private uint GetInitialDataSpaceLength
          private readonly bool series3;
          private readonly List<AsymmetricCipherKeyPair> ecKeyPairs = new List<AsymmetricCipherKeyPair>();
          private readonly Dictionary<uint, byte[]> volatileKeys = new Dictionary<uint, byte[]>();
@@ -835,7 +914,7 @@ index 78175b71b..f2d0c05ce 100644
          private readonly uint flashDataRegionStart;
          private readonly uint flashCodeRegionEnd;
          private readonly uint flashCodeRegionStart;
-@@ -4017,6 +4587,14 @@ public bool SetState(byte[] stateData)
+@@ -4017,6 +4666,14 @@ public bool SetState(byte[] stateData)
                  return true;
              }
  
@@ -850,15 +929,16 @@ index 78175b71b..f2d0c05ce 100644
              private void ProcessWord(byte[] input, int inOff)
              {
                  X[xOff] = BE_To_UInt32(input, inOff);
-@@ -4239,6 +4817,7 @@ private enum CommandId
+@@ -4239,6 +4896,8 @@ private enum CommandId
              CreateKey                       = 0x0200,
              ReadPublicKey                   = 0x0201,
              DeriveKey                       = 0x0202,
 +            SignatureSign                   = 0x0600,
++            SignatureVerify                 = 0x0601,
              Hash                            = 0x0300,
              HashUpdate                      = 0x0301,
              HashHmac                        = 0x0302,
-@@ -4360,4 +4939,4 @@ private enum DeviceDataReadSize
+@@ -4360,4 +5019,4 @@ private enum DeviceDataReadSize
              GetValue       = 0x04,
          }
      }
