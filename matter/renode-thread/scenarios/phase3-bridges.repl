@@ -1,0 +1,5 @@
+bleCentral: Wireless.BleCentralBridge @ sysbus <0x4FFF0000, +0x100>
+
+ieee802154: Wireless.Ieee802154HostBridge @ sysbus <0x4FFE0000, +0x100>
+    channel: 15
+    verbose: true

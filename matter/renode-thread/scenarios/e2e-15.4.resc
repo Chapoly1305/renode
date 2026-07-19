@@ -1,0 +1,20 @@
+# Renode scenario: STOCK SiLabs Matter firmware + BLE central + 802.15.4 host bridge.
+# Run from the sl-renode repo root:  ./renode --disable-xwt --port 3456 matter/renode-thread/scenarios/e2e-15.4.resc
+# Adjust the ELF path if your stock firmware lives elsewhere.
+mach create "stock"
+machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
+machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
+sysbus LoadELF @matter/brd2601b-matter-silabs-lighting-example.out
+# --- the real-time fix: model the M33 (+ M0+ radio sequencer) at the real 39 MHz, not the 100-MIPS default.
+# Without this the emulation runs ~0.68x real-time and host-OpenThread MAC/MLE timing fails to line up.
+cpu PerformanceInMips 39
+seqcpu PerformanceInMips 39
+emulation CreateBLEMedium "wireless"
+connector Connect sysbus.radio wireless
+connector Connect sysbus.bleCentral wireless
+connector Connect sysbus.ieee802154 wireless
+emulation SetGlobalSerialExecution true
+emulation SetGlobalAdvanceImmediately false
+logFile @/tmp/renode-15.4.log true
+logLevel 2
+start
