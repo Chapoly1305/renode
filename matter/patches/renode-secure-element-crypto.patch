@@ -1,5 +1,5 @@
 diff --git a/src/Emulator/Peripherals/Peripherals/Miscellaneous/SiLabs/SiLabs_SecureElement.cs b/src/Emulator/Peripherals/Peripherals/Miscellaneous/SiLabs/SiLabs_SecureElement.cs
-index 78175b71b..868c52a44 100644
+index 78175b71b..821ae56a1 100644
 --- a/src/Emulator/Peripherals/Peripherals/Miscellaneous/SiLabs/SiLabs_SecureElement.cs
 +++ b/src/Emulator/Peripherals/Peripherals/Miscellaneous/SiLabs/SiLabs_SecureElement.cs
 @@ -24,6 +24,7 @@
@@ -276,7 +276,126 @@ index 78175b71b..868c52a44 100644
          private ResponseCode HandleAesCmacCommand(uint inputDma, uint outputDma, uint[] commandParams, uint commandParamsCount)
          {
              if(commandParamsCount != 2)
-@@ -2093,6 +2241,161 @@ private ResponseCode HandleReadPublicKeyCommand(uint inputDma, uint outputDma, u
+@@ -971,28 +1119,38 @@ private ResponseCode HandleAesCcmEncryptCommand(uint inputDma, uint outputDma, u
+             FetchFromRam(aadPtr, aad, 0, aadLength);
+             parent.Log(LogLevel.Noisy, "Aad=[{0}]", BitConverter.ToString(aad));
+ 
+-            // Fifth input DMA descriptor contains the plaintext input data
+-            uint inputDataPtr;
+-            uint inputDataLength;
+-            UnpackDmaDescriptor(nextDescriptorPtr, out inputDataPtr, out inputDataLength, out transferOptions, out nextDescriptorPtr, machine);
+-            parent.Log(LogLevel.Noisy, "AES_CCM_ENCRYPT: INPUT4: inputDataPtr=0x{0:X} inputDataLength={1} options={2} nextDescriptorPtr=0x{3:X}",
+-                     inputDataPtr, inputDataLength, transferOptions, nextDescriptorPtr);
+-            byte[] inputData = new byte[inputDataLength];
+-            FetchFromRam(inputDataPtr, inputData, 0, inputDataLength);
+-            parent.Log(LogLevel.Noisy, "InputData=[{0}]", BitConverter.ToString(inputData));
+-
+-            // First output DMA descriptor contains the encrypted output data
+-            uint outputDataPtr;
+-            uint outputDataLength;
+-            UnpackDmaDescriptor(outputDma, out outputDataPtr, out outputDataLength, out transferOptions, out nextDescriptorPtr, machine);
+-            parent.Log(LogLevel.Noisy, "AES_CCM_ENCRYPT: OUTPUT0: outputDataPtr=0x{0:X} outputDataLength={1} options={2} nextDescriptorPtr=0x{3:X}",
+-                     outputDataPtr, outputDataLength, transferOptions, nextDescriptorPtr);
++            // Fifth input DMA descriptor contains the plaintext. When empty (e.g. an encrypted empty-payload
++            // MRP acknowledgement) the SE omits this descriptor, so only read it when there is data.
++            uint inputDataPtr = 0;
++            uint inputDataLength = 0;
++            byte[] inputData = new byte[inputDataSize];
++            if(inputDataSize > 0)
++            {
++                UnpackDmaDescriptor(nextDescriptorPtr, out inputDataPtr, out inputDataLength, out transferOptions, out nextDescriptorPtr, machine);
++                parent.Log(LogLevel.Noisy, "AES_CCM_ENCRYPT: INPUT4: inputDataPtr=0x{0:X} inputDataLength={1} options={2} nextDescriptorPtr=0x{3:X}",
++                         inputDataPtr, inputDataLength, transferOptions, nextDescriptorPtr);
++                FetchFromRam(inputDataPtr, inputData, 0, inputDataLength);
++                parent.Log(LogLevel.Noisy, "InputData=[{0}]", BitConverter.ToString(inputData));
++            }
+ 
+-            // Second output DMA descriptor contains the output tag
++            // First output DMA descriptor contains the encrypted output data -- omitted when the ciphertext
++            // is empty, in which case the output DMA points directly at the tag descriptor.
++            uint outputDataPtr = 0;
++            uint outputDataLength = 0;
+             uint outputTagPtr;
+             uint outputTagLength;
+-            UnpackDmaDescriptor(nextDescriptorPtr, out outputTagPtr, out outputTagLength, out transferOptions, out nextDescriptorPtr, machine);
+-            parent.Log(LogLevel.Noisy, "AES_CCM_ENCRYPT: OUTPUT1: outputTagPtr=0x{0:X} outputTagLength={1} options={2} nextDescriptorPtr=0x{3:X}",
++            if(inputDataSize > 0)
++            {
++                UnpackDmaDescriptor(outputDma, out outputDataPtr, out outputDataLength, out transferOptions, out nextDescriptorPtr, machine);
++                parent.Log(LogLevel.Noisy, "AES_CCM_ENCRYPT: OUTPUT0: outputDataPtr=0x{0:X} outputDataLength={1} options={2} nextDescriptorPtr=0x{3:X}",
++                         outputDataPtr, outputDataLength, transferOptions, nextDescriptorPtr);
++                UnpackDmaDescriptor(nextDescriptorPtr, out outputTagPtr, out outputTagLength, out transferOptions, out nextDescriptorPtr, machine);
++            }
++            else
++            {
++                UnpackDmaDescriptor(outputDma, out outputTagPtr, out outputTagLength, out transferOptions, out nextDescriptorPtr, machine);
++            }
++            parent.Log(LogLevel.Noisy, "AES_CCM_ENCRYPT: OUTPUT1(tag): outputTagPtr=0x{0:X} outputTagLength={1} options={2} nextDescriptorPtr=0x{3:X}",
+                      outputTagPtr, outputTagLength, transferOptions, nextDescriptorPtr);
+ 
+             CcmBlockCipher cipher = new CcmBlockCipher(new AesEngine());
+@@ -1631,8 +1789,7 @@ private ResponseCode HandleAesCcmDecryptCommand(uint inputDma, uint outputDma, u
+             uint nonceSize = (commandParams[1] >> 16) & 0xFFFF;
+             uint associatedAuthenticatedDataSize = commandParams[2];
+             uint inputDataSize = commandParams[3];
+-            parent.Log(LogLevel.Noisy, "AES_CCM_DECRYPT: Other Command Params: tagSize={0} nonceSize={1} aadSize={2} inputDataSize={3}",
+-                     tagSize, nonceSize, associatedAuthenticatedDataSize, inputDataSize);
++            parent.Log(LogLevel.Noisy, "AES_CCM_DECRYPT params: tagSize={0} nonceSize={1} aadSize={2} inputDataSize={3}", tagSize, nonceSize, associatedAuthenticatedDataSize, inputDataSize);
+ 
+             if(!IsTagSizeValid(tagSize) || !IsNonceSizeValid(nonceSize))
+             {
+@@ -1678,14 +1835,20 @@ private ResponseCode HandleAesCcmDecryptCommand(uint inputDma, uint outputDma, u
+             FetchFromRam(aadPtr, aad, 0, aadLength);
+             parent.Log(LogLevel.Noisy, "Aad=[{0}]", BitConverter.ToString(aad));
+ 
+-            // Fifth input DMA descriptor contains the plaintext input data
+-            uint inputDataPtr;
+-            uint inputDataLength;
+-            UnpackDmaDescriptor(nextDescriptorPtr, out inputDataPtr, out inputDataLength, out transferOptions, out nextDescriptorPtr, machine);
+-            parent.Log(LogLevel.Noisy, "AES_CCM_DECRYPT: INPUT4: inputDataPtr=0x{0:X} inputDataLength={1} options={2} nextDescriptorPtr=0x{3:X}",
+-                     inputDataPtr, inputDataLength, transferOptions, nextDescriptorPtr);
++            // Fifth input DMA descriptor contains the ciphertext. When the ciphertext is empty (e.g. an
++            // encrypted empty-payload MRP acknowledgement, which still carries AAD + tag) the SE omits this
++            // descriptor, so only read it when there is data -- otherwise the descriptor walk runs off the
++            // end of the chain into the null terminator and throws.
++            uint inputDataPtr = 0;
++            uint inputDataLength = 0;
++            if(inputDataSize > 0)
++            {
++                UnpackDmaDescriptor(nextDescriptorPtr, out inputDataPtr, out inputDataLength, out transferOptions, out nextDescriptorPtr, machine);
++                parent.Log(LogLevel.Noisy, "AES_CCM_DECRYPT: INPUT4: inputDataPtr=0x{0:X} inputDataLength={1} options={2} nextDescriptorPtr=0x{3:X}",
++                         inputDataPtr, inputDataLength, transferOptions, nextDescriptorPtr);
++            }
+ 
+-            // Sixth input DMA descriptor contains the tag to be verified
++            // Next input DMA descriptor contains the tag to be verified
+             uint tagPtr;
+             uint tagLength;
+             UnpackDmaDescriptor(nextDescriptorPtr, out tagPtr, out tagLength, out transferOptions, out nextDescriptorPtr, machine);
+@@ -1697,12 +1860,16 @@ private ResponseCode HandleAesCcmDecryptCommand(uint inputDma, uint outputDma, u
+             FetchFromRam(tagPtr, inputDataAndTag, inputDataLength, tagLength);
+             parent.Log(LogLevel.Noisy, "InputDataAndTag=[{0}]", BitConverter.ToString(inputDataAndTag));
+ 
+-            // First output DMA descriptor contains the decrypted output data
+-            uint outputDataPtr;
+-            uint outputDataLength;
+-            UnpackDmaDescriptor(outputDma, out outputDataPtr, out outputDataLength, out transferOptions, out nextDescriptorPtr, machine);
+-            parent.Log(LogLevel.Noisy, "AES_CCM_DECRYPT: OUTPUT0: outputDataPtr=0x{0:X} outputDataLength={1} options={2} nextDescriptorPtr=0x{3:X}",
+-                     outputDataPtr, outputDataLength, transferOptions, nextDescriptorPtr);
++            // First output DMA descriptor contains the decrypted output data -- likewise omitted when the
++            // plaintext output is empty.
++            uint outputDataPtr = 0;
++            uint outputDataLength = 0;
++            if(inputDataSize > 0)
++            {
++                UnpackDmaDescriptor(outputDma, out outputDataPtr, out outputDataLength, out transferOptions, out nextDescriptorPtr, machine);
++                parent.Log(LogLevel.Noisy, "AES_CCM_DECRYPT: OUTPUT0: outputDataPtr=0x{0:X} outputDataLength={1} options={2} nextDescriptorPtr=0x{3:X}",
++                         outputDataPtr, outputDataLength, transferOptions, nextDescriptorPtr);
++            }
+             byte[] outputData = new byte[outputDataLength];
+ 
+             CcmBlockCipher cipher = new CcmBlockCipher(new AesEngine());
+@@ -2093,6 +2260,161 @@ private ResponseCode HandleReadPublicKeyCommand(uint inputDma, uint outputDma, u
              return ResponseCode.Ok;
          }
  
@@ -438,7 +557,7 @@ index 78175b71b..868c52a44 100644
          private ResponseCode HandleDiffieHellmanCommand(uint inputDma, uint outputDma, uint[] commandParams, uint commandParamsCount)
          {
              if(commandParamsCount != 2)
-@@ -4017,6 +4320,14 @@ public bool SetState(byte[] stateData)
+@@ -4017,6 +4339,14 @@ public bool SetState(byte[] stateData)
                  return true;
              }
  
@@ -453,7 +572,7 @@ index 78175b71b..868c52a44 100644
              private void ProcessWord(byte[] input, int inOff)
              {
                  X[xOff] = BE_To_UInt32(input, inOff);
-@@ -4239,6 +4550,7 @@ private enum CommandId
+@@ -4239,6 +4569,7 @@ private enum CommandId
              CreateKey                       = 0x0200,
              ReadPublicKey                   = 0x0201,
              DeriveKey                       = 0x0202,
@@ -461,7 +580,7 @@ index 78175b71b..868c52a44 100644
              Hash                            = 0x0300,
              HashUpdate                      = 0x0301,
              HashHmac                        = 0x0302,
-@@ -4360,4 +4672,4 @@ private enum DeviceDataReadSize
+@@ -4360,4 +4691,4 @@ private enum DeviceDataReadSize
              GetValue       = 0x04,
          }
      }
