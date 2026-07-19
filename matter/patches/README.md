@@ -11,8 +11,12 @@ The complete fake-transport feature (device + host), applyable to a matching con
 
 ```bash
 cd <connectedhomeip>
-git apply matter/patches/connectedhomeip-fake-ble-transport.patch   # baseline: see header in the patch
+git apply matter/patches/connectedhomeip-fake-ble-transport.patch
 ```
+
+**Pinned baseline:** connectedhomeip `master` @ `6137e726` (`v1.4.2.0-3211-g6137e72682`).
+Also published as a branch: **`chapoly1305/fake-ble-transport` @ `e2ef82f369`**
+(`git@github.com:Chapoly1305/connectedhomeip.git`) — prefer the branch over the patch when possible.
 
 ### Files it changes
 
@@ -89,12 +93,37 @@ reaching the device before the handshake WRITE, so the device stayed silent and 
 +    }
 ```
 
-## Status
+### 3. Device-side yield — don't starve the CHIP event loop
 
-With both fixes, chip-tool builds and the pipeline is proven end-to-end: real chip-tool ↔ relay ↔
-Renode ↔ firmware, and the device **receives** CONNECT + SUBSCRIBE + the BTP handshake WRITE. A
-**device-side** blocker remains — the firmware does not transmit the BTP handshake response (zero
-EUSART1 TX), so PASE never starts. Suspected cause: a radio power-manager busy-wait at boot
-(`radio` writes to `MCUEM1PMODE`, an unmodeled EM1P ack) starving the CHIP event-loop task. Device
-logs go to SEGGER RTT (not visible in Renode); the next step is device-side log visibility or
-modelling the radio EM1P ack. See `../README.md` and the project memory for details.
+The device `FakeBLE` task runs at `osPriorityRealtime6` and `BlockingRead` busy-polls
+`UARTDRV_ReceiveB`, which under Renode returns immediately when no bytes are queued (it does not block
+on a real RX interrupt). Without a yield this top-priority poll starves the Matter/CHIP event-loop
+task. Fix in `src/platform/silabs/efr32/FakeBLETransport.cpp`:
+
+```diff
+     while (UARTDRV_ReceiveB(sFakeBleUartHandle, buf, static_cast<UARTDRV_Count_t>(length)) != ECODE_EMDRV_UARTDRV_OK)
+     {
+         // Retry: the fake transport is a test harness, not a real-time path.
++        // Yield so lower-priority tasks (esp. the Matter/CHIP event loop ...) can run.
++        osDelay(1);
+     }
+```
+
+## Status (2026-07-19) — transport works; blocker moved into the Renode Secure Engine
+
+The whole transport is proven end-to-end: real chip-tool ↔ relay ↔ Renode ↔ firmware now
+complete BLE connect, the full BTP handshake, and the entire SPAKE2+ PASE exchange
+(`PBKDFParamRequest→Response`, `Pake1→Pake2`). The earlier event-dispatch gap was fixed
+(host-side write/subscribe-completion synthesis + device-side task priority/yield — all in the
+patch above).
+
+The **only** remaining blocker is **not in this patch and not in the credentials** — it is the
+emulated Secure Engine: Renode's `semailbox` does not implement HMAC
+(`ProcessCommand(): Command ID 0x302 not handled!`, SE cmd `0x302` = `HashHmac`), so the
+device's SPAKE2+ key-confirmation MAC is computed wrong and PASE fails with
+`Failed to verify peer's MAC`. Credentials are proven correct (device advertises the standard
+`"SPAKE2P Key Salt"` / 1000 iters matching the compiled 20202021 verifier; NVM3 is irrelevant).
+
+**Fix location & full write-up:** see `../HANDOFF.md`. The fix is to implement
+`CommandId.HashHmac` in the Renode model
+`src/Infrastructure/.../Miscellaneous/SiLabs/SiLabs_SecureElement.cs`.

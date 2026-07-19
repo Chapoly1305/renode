@@ -1,13 +1,197 @@
-# connectedhomeip fake CHIPoBLE transport patch (for Renode Matter commissioning)
-# Apply from the connectedhomeip repo root:  git apply matter/patches/connectedhomeip-fake-ble-transport.patch
-# Baseline commit: 6137e72682
-#
+diff --git a/examples/platform/silabs/provision/ProvisionStorageDefault.cpp b/examples/platform/silabs/provision/ProvisionStorageDefault.cpp
+index 241156277d..2ea421e578 100644
+--- a/examples/platform/silabs/provision/ProvisionStorageDefault.cpp
++++ b/examples/platform/silabs/provision/ProvisionStorageDefault.cpp
+@@ -398,13 +398,14 @@ CHIP_ERROR Storage::GetSpake2pIterationCount(uint32_t & value)
+ {
+     CHIP_ERROR err = SilabsConfig::ReadConfigValue(SilabsConfig::kConfigKey_Spake2pIterationCount, value);
+ #if defined(CHIP_DEVICE_CONFIG_USE_TEST_SPAKE2P_ITERATION_COUNT) && CHIP_DEVICE_CONFIG_USE_TEST_SPAKE2P_ITERATION_COUNT
+-    if (CHIP_DEVICE_ERROR_CONFIG_NOT_FOUND == err)
+-    {
+-        value = CHIP_DEVICE_CONFIG_USE_TEST_SPAKE2P_ITERATION_COUNT;
+-        err   = CHIP_NO_ERROR;
+-    }
+-#endif
++    // Renode fake-transport build: NVM3 is unprovisioned, so force the test iteration count so the
++    // salt/verifier/iteration triple stays consistent with passcode 20202021 (see GetSpake2pSalt/Verifier).
++    (void) err;
++    value = CHIP_DEVICE_CONFIG_USE_TEST_SPAKE2P_ITERATION_COUNT;
++    return CHIP_NO_ERROR;
++#else
+     return err;
++#endif
+ }
+ 
+ CHIP_ERROR Storage::SetSetupPasscode(uint32_t value)
+@@ -426,7 +427,19 @@ CHIP_ERROR Storage::SetSpake2pSalt(const char * value, size_t size)
+ 
+ CHIP_ERROR Storage::GetSpake2pSalt(char * value, size_t max, size_t & size)
+ {
+-    return SilabsConfig::ReadConfigValueStr(SilabsConfig::kConfigKey_Spake2pSalt, value, max, size);
++    CHIP_ERROR err = SilabsConfig::ReadConfigValueStr(SilabsConfig::kConfigKey_Spake2pSalt, value, max, size);
++#if defined(CHIP_DEVICE_CONFIG_USE_TEST_SPAKE2P_SALT)
++    // Renode fake-transport build: NVM3 is unprovisioned, so force the compiled test salt (kept
++    // consistent with the test verifier/iteration count for passcode 20202021).
++    (void) err;
++    static const char kTestSalt[] = CHIP_DEVICE_CONFIG_USE_TEST_SPAKE2P_SALT;
++    size                          = strlen(kTestSalt);
++    VerifyOrReturnError(size <= max, CHIP_ERROR_BUFFER_TOO_SMALL);
++    memcpy(value, kTestSalt, size);
++    return CHIP_NO_ERROR;
++#else
++    return err;
++#endif
+ }
+ 
+ CHIP_ERROR Storage::SetSpake2pVerifier(const char * value, size_t size)
+@@ -436,7 +449,20 @@ CHIP_ERROR Storage::SetSpake2pVerifier(const char * value, size_t size)
+ 
+ CHIP_ERROR Storage::GetSpake2pVerifier(char * value, size_t max, size_t & size)
+ {
+-    return SilabsConfig::ReadConfigValueStr(SilabsConfig::kConfigKey_Spake2pVerifier, value, max, size);
++    CHIP_ERROR err = SilabsConfig::ReadConfigValueStr(SilabsConfig::kConfigKey_Spake2pVerifier, value, max, size);
++#if defined(CHIP_DEVICE_CONFIG_USE_TEST_SPAKE2P_VERIFIER)
++    // Renode fake-transport build: NVM3 is unprovisioned, so force the compiled test verifier -- generated
++    // for passcode 20202021 with the test salt/iteration count -- so a host chip-tool using 20202021 can
++    // complete PASE. (Production devices read a real provisioned verifier from NVM3.)
++    (void) err;
++    static const char kTestVerifier[] = CHIP_DEVICE_CONFIG_USE_TEST_SPAKE2P_VERIFIER;
++    size                              = strlen(kTestVerifier);
++    VerifyOrReturnError(size <= max, CHIP_ERROR_BUFFER_TOO_SMALL);
++    memcpy(value, kTestVerifier, size);
++    return CHIP_NO_ERROR;
++#else
++    return err;
++#endif
+ }
+ 
+ //
+diff --git a/src/ble/BLEEndPoint.cpp b/src/ble/BLEEndPoint.cpp
+index a39863bb25..89ef23509e 100644
+--- a/src/ble/BLEEndPoint.cpp
++++ b/src/ble/BLEEndPoint.cpp
+@@ -50,7 +50,7 @@
+ #include "BtpEngine.h"
+ 
+ // Define below to enable extremely verbose, BLE end point-specific debug logging.
+-#undef CHIP_BLE_END_POINT_DEBUG_LOGGING_ENABLED
++#define CHIP_BLE_END_POINT_DEBUG_LOGGING_ENABLED 1
+ 
+ #ifdef CHIP_BLE_END_POINT_DEBUG_LOGGING_ENABLED
+ #define ChipLogDebugBleEndPoint(MOD, MSG, ...) ChipLogDetail(MOD, MSG, ##__VA_ARGS__)
+diff --git a/src/include/platform/CHIPDeviceConfig.h b/src/include/platform/CHIPDeviceConfig.h
+index 3cc3211f18..3b84e7702c 100644
+--- a/src/include/platform/CHIPDeviceConfig.h
++++ b/src/include/platform/CHIPDeviceConfig.h
+@@ -621,6 +621,18 @@
+ #define CHIP_DEVICE_CONFIG_ENABLE_CHIPOBLE 0
+ #endif
+ 
++/**
++ * CHIP_DEVICE_CONFIG_ENABLE_FAKE_BLE_TRANSPORT
++ *
++ * Renode test harness only: drive CHIPoBLE over a software byte-stream transport instead of the
++ * platform's real BLE stack, so commissioning can be exercised against firmware running inside
++ * the Renode emulator. See src/platform/silabs/efr32/FakeBLETransport.cpp (device) and
++ * src/platform/Linux/ble/FakeBleTransport.cpp (chip-tool).
++ */
++#ifndef CHIP_DEVICE_CONFIG_ENABLE_FAKE_BLE_TRANSPORT
++#define CHIP_DEVICE_CONFIG_ENABLE_FAKE_BLE_TRANSPORT 0
++#endif
++
+ /**
+  * CHIP_DEVICE_CONFIG_SINGLE_CHIPOBLE_CONNECTION
+  *
+diff --git a/src/platform/Linux/BLEManagerImpl.cpp b/src/platform/Linux/BLEManagerImpl.cpp
+index 6513808eee..d8f79ed0b5 100644
+--- a/src/platform/Linux/BLEManagerImpl.cpp
++++ b/src/platform/Linux/BLEManagerImpl.cpp
+@@ -44,6 +44,10 @@
+ 
+ #include "bluez/BluezEndpoint.h"
+ 
++#if CHIP_DEVICE_CONFIG_ENABLE_FAKE_BLE_TRANSPORT
++#include "ble/FakeBleTransport.h"
++#endif
++
+ #if !CHIP_DEVICE_CONFIG_SUPPORTS_CONCURRENT_CONNECTION
+ #include <platform/DeviceControlServer.h>
+ #endif
+@@ -78,7 +82,20 @@ BLEManagerImpl BLEManagerImpl::sInstance;
+ 
+ CHIP_ERROR BLEManagerImpl::_Init()
+ {
+-    ReturnErrorOnFailure(BleLayer::Init(this, this, this, &DeviceLayer::SystemLayer()));
++#if CHIP_DEVICE_CONFIG_ENABLE_FAKE_BLE_TRANSPORT
++    Optional<uint16_t> fakeBlePort = GetFakeBleTransportPort();
++    if (fakeBlePort.HasValue())
++    {
++        ChipLogProgress(Ble, "Using fake BLE transport on port %u (Renode test harness)", fakeBlePort.Value());
++        static FakeBleConnectionDelegate sFakeConnDelegate(fakeBlePort.Value());
++        static FakeBlePlatformDelegate sFakePlatformDelegate;
++        ReturnErrorOnFailure(BleLayer::Init(&sFakePlatformDelegate, &sFakeConnDelegate, this, &DeviceLayer::SystemLayer()));
++    }
++    else
++#endif // CHIP_DEVICE_CONFIG_ENABLE_FAKE_BLE_TRANSPORT
++    {
++        ReturnErrorOnFailure(BleLayer::Init(this, this, this, &DeviceLayer::SystemLayer()));
++    }
+ 
+     mServiceMode = ConnectivityManager::kCHIPoBLEServiceMode_Enabled;
+     mFlags.ClearAll().Set(Flags::kAdvertisingEnabled, CHIP_DEVICE_CONFIG_CHIPOBLE_ENABLE_ADVERTISING_AUTOSTART && !mIsCentral);
+diff --git a/src/platform/Linux/BUILD.gn b/src/platform/Linux/BUILD.gn
+index 3b941dd36c..f7fa9d789f 100644
+--- a/src/platform/Linux/BUILD.gn
++++ b/src/platform/Linux/BUILD.gn
+@@ -90,6 +90,10 @@ declare_args() {
+   if (chip_enable_wifi && chip_device_config_enable_wifipaf) {
+     chip_linux_wifi_paf_manager = "wpa_supplicant"
+   }
++
++  # Renode test harness: chip-tool talks a fake byte-stream BLE transport to a device firmware
++  # running inside Renode instead of real BlueZ. See src/platform/Linux/ble/FakeBleTransport.cpp.
++  chip_enable_fake_ble_transport = false
+ }
+ 
+ if (chip_enable_thread) {
+@@ -180,6 +184,14 @@ static_library("Linux") {
+       "bluez/ChipDeviceScanner.h",
+       "bluez/Types.h",
+     ]
++
++    if (chip_enable_fake_ble_transport) {
++      sources += [
++        "ble/FakeBleTransport.cpp",
++        "ble/FakeBleTransport.h",
++      ]
++      defines = [ "CHIP_DEVICE_CONFIG_ENABLE_FAKE_BLE_TRANSPORT=1" ]
++    }
+   }
+ 
+   if (chip_with_trusty_os) {
+@@ -272,10 +284,15 @@ static_library("Linux") {
+       sources += [ "NetworkCommissioningWiFiDriver.cpp" ]
+     }
+ 
+-    defines = [
++    _network_manager_defines = [
+       "CHIP_LINUX_NETWORK_MANAGER=\"${chip_linux_network_manager}\"",
+       "CHIP_LINUX_WIFI_PAF_MANAGER=\"${chip_linux_wifi_paf_manager}\"",
+     ]
++    if (defined(defines)) {
++      defines += _network_manager_defines
++    } else {
++      defines = _network_manager_defines
++    }
+ 
+     if (chip_linux_network_manager == "wpa_supplicant") {
+       defines += [ "CHIP_LINUX_NETWORK_MANAGER_WPA_SUPPLICANT=1" ]
 diff --git a/src/platform/Linux/ble/FakeBleTransport.cpp b/src/platform/Linux/ble/FakeBleTransport.cpp
 new file mode 100644
-index 0000000000..4e6485ede8
+index 0000000000..579e272ccb
 --- /dev/null
 +++ b/src/platform/Linux/ble/FakeBleTransport.cpp
-@@ -0,0 +1,253 @@
+@@ -0,0 +1,294 @@
 +/*
 + *
 + *    Copyright (c) 2026 Project CHIP Authors
@@ -40,6 +224,7 @@ index 0000000000..4e6485ede8
 +
 +#include <lib/support/CodeUtils.h>
 +#include <lib/support/logging/CHIPLogging.h>
++#include <platform/PlatformManager.h>
 +
 +namespace chip {
 +namespace DeviceLayer {
@@ -121,8 +306,21 @@ index 0000000000..4e6485ede8
 +            System::PacketBufferHandle buf = System::PacketBufferHandle::NewWithData(payload, len, 0, 0);
 +            if (!buf.IsNull())
 +            {
-+                gBleLayer->HandleIndicationReceived(kFakeConnObj, &Ble::CHIP_BLE_SVC_ID, &Ble::CHIP_BLE_CHAR_2_UUID,
-+                                                     std::move(buf));
++                // Real BLE platforms deliver GATT events on the CHIP event-loop thread. Do the same:
++                // marshal the indication onto that thread via ScheduleWork instead of calling the
++                // BleLayer from this raw RX thread. This is both thread-safe (no chipDie unsafe-access
++                // abort) and ensures the event loop then drives BTP sending of the follow-up data.
++                LogErrorOnFailure(DeviceLayer::PlatformMgr().ScheduleWork(
++                    [](intptr_t ctx) {
++                        System::PacketBufferHandle b =
++                            System::PacketBufferHandle::Adopt(reinterpret_cast<System::PacketBuffer *>(ctx));
++                        if (gBleLayer != nullptr)
++                        {
++                            gBleLayer->HandleIndicationReceived(kFakeConnObj, &Ble::CHIP_BLE_SVC_ID,
++                                                                &Ble::CHIP_BLE_CHAR_2_UUID, std::move(b));
++                        }
++                    },
++                    reinterpret_cast<intptr_t>(std::move(buf).UnsafeRelease())));
 +            }
 +        }
 +    }
@@ -130,7 +328,14 @@ index 0000000000..4e6485ede8
 +    ChipLogProgress(Ble, "FakeBleTransport: peer connection closed");
 +    if (gBleLayer != nullptr)
 +    {
-+        gBleLayer->HandleConnectionError(kFakeConnObj, CHIP_ERROR_CONNECTION_ABORTED);
++        LogErrorOnFailure(DeviceLayer::PlatformMgr().ScheduleWork(
++            [](intptr_t) {
++                if (gBleLayer != nullptr)
++                {
++                    gBleLayer->HandleConnectionError(kFakeConnObj, CHIP_ERROR_CONNECTION_ABORTED);
++                }
++            },
++            0));
 +    }
 +}
 +
@@ -188,17 +393,6 @@ index 0000000000..4e6485ede8
 +        return;
 +    }
 +
-+    // The device gates its outgoing indications (including the BTP handshake response) on an active
-+    // C2 subscription. In real CHIPoBLE the central enables C2 indications during connection setup;
-+    // over the fake pipe there is no GATT/CCCD layer, so proactively announce the subscription right
-+    // after connecting -- before the BTP handshake WRITE -- so the device can indicate back.
-+    if (!SendFrame(FrameType::kSubscribe, nullptr, 0))
-+    {
-+        ChipLogError(Ble, "FakeBleTransport: failed to send SUBSCRIBE frame");
-+        BleConnectionDelegate::OnConnectionError(appState, CHIP_ERROR_INTERNAL);
-+        return;
-+    }
-+
 +    ChipLogProgress(Ble, "FakeBleTransport: connected");
 +    BleConnectionDelegate::OnConnectionComplete(appState, kFakeConnObj);
 +}
@@ -218,7 +412,23 @@ index 0000000000..4e6485ede8
 +CHIP_ERROR FakeBlePlatformDelegate::SubscribeCharacteristic(BLE_CONNECTION_OBJECT /* connObj */, const Ble::ChipBleUUID * /* svcId */,
 +                                                            const Ble::ChipBleUUID * /* charId */)
 +{
-+    return SendFrame(FrameType::kSubscribe, nullptr, 0) ? CHIP_NO_ERROR : CHIP_ERROR_INTERNAL;
++    if (!SendFrame(FrameType::kSubscribe, nullptr, 0))
++    {
++        return CHIP_ERROR_INTERNAL;
++    }
++    // A real GATT subscribe (C2 CCCD write) completes with a subscribe-complete callback, which the BTP
++    // engine needs to clear kGattOperationInFlight and continue the handshake (it prompts the peripheral
++    // to send its capabilities indication). Synthesize that completion on the CHIP event-loop thread --
++    // without it the central stalls with "Gatt op in flight" and never sends the PASE request.
++    LogErrorOnFailure(DeviceLayer::PlatformMgr().ScheduleWork(
++        [](intptr_t) {
++            if (gBleLayer != nullptr)
++            {
++                gBleLayer->HandleSubscribeComplete(kFakeConnObj, &Ble::CHIP_BLE_SVC_ID, &Ble::CHIP_BLE_CHAR_2_UUID);
++            }
++        },
++        0));
++    return CHIP_NO_ERROR;
 +}
 +
 +CHIP_ERROR FakeBlePlatformDelegate::UnsubscribeCharacteristic(BLE_CONNECTION_OBJECT /* connObj */,
@@ -255,6 +465,21 @@ index 0000000000..4e6485ede8
 +                                                     const Ble::ChipBleUUID * /* charId */, System::PacketBufferHandle pBuf)
 +{
 +    bool ok = SendFrame(FrameType::kWriteRequest, pBuf->Start(), static_cast<uint16_t>(pBuf->DataLength()));
++    // A real GATT write completes with a write-confirmation callback, which the BTP engine needs to
++    // clear kGattOperationInFlight and send the next fragment/message. The fake pipe is reliable, so
++    // synthesize that confirmation on the CHIP event-loop thread. Without it the BTP engine stalls
++    // after the first write and never sends the PASE PBKDFParamRequest.
++    if (ok)
++    {
++        LogErrorOnFailure(DeviceLayer::PlatformMgr().ScheduleWork(
++            [](intptr_t) {
++                if (gBleLayer != nullptr)
++                {
++                    gBleLayer->HandleWriteConfirmation(kFakeConnObj, &Ble::CHIP_BLE_SVC_ID, &Ble::CHIP_BLE_CHAR_1_UUID);
++                }
++            },
++            0));
++    }
 +    return ok ? CHIP_NO_ERROR : CHIP_ERROR_INTERNAL;
 +}
 +
@@ -422,10 +647,10 @@ index 9b728bcc03..bfdacab175 100644
      "${chip_root}/src/app/common:ids",
 diff --git a/src/platform/silabs/efr32/FakeBLETransport.cpp b/src/platform/silabs/efr32/FakeBLETransport.cpp
 new file mode 100644
-index 0000000000..38e56ba826
+index 0000000000..81906e89d2
 --- /dev/null
 +++ b/src/platform/silabs/efr32/FakeBLETransport.cpp
-@@ -0,0 +1,260 @@
+@@ -0,0 +1,271 @@
 +/*
 + *
 + *    Copyright (c) 2026 Project CHIP Authors
@@ -539,7 +764,12 @@ index 0000000000..38e56ba826
 +    .cb_size    = osThreadCbSize,
 +    .stack_mem  = sFakeBleTaskStack,
 +    .stack_size = kFakeBleTaskStackSize,
-+    .priority   = osPriorityRealtime6,
++    // Run BELOW the Matter/CHIP task (osPriorityHigh) and OpenThread (24): this task is a low-rate
++    // producer that reads frames and posts events, while the high-priority CHIP event loop is the
++    // consumer that dispatches them and generates BTP/PASE responses. At a high priority its
++    // UARTDRV_ReceiveB busy-poll (UARTDRV_ReceiveB returns immediately under Renode) starves the CHIP
++    // task and commissioning stalls at the BLE handshake.
++    .priority   = osPriorityLow,
 +};
 +
 +// Blocking read of exactly `length` bytes. UARTDRV's callback-based Receive() is overkill for a
@@ -549,6 +779,12 @@ index 0000000000..38e56ba826
 +    while (UARTDRV_ReceiveB(sFakeBleUartHandle, buf, static_cast<UARTDRV_Count_t>(length)) != ECODE_EMDRV_UARTDRV_OK)
 +    {
 +        // Retry: the fake transport is a test harness, not a real-time path.
++        // Yield so lower-priority tasks can run. This task is osPriorityRealtime6 and under Renode
++        // UARTDRV_ReceiveB returns immediately when no bytes are queued, so without a yield this
++        // busy-poll starves the Matter/CHIP event-loop task -- which must run to dispatch the
++        // CHIPoBLE write we posted and generate the BTP handshake response. Starving it stalls
++        // commissioning at the BLE handshake.
++        osDelay(1);
 +    }
 +}
 +
