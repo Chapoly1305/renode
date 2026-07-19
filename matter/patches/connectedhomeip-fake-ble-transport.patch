@@ -1,0 +1,688 @@
+# connectedhomeip fake CHIPoBLE transport patch (for Renode Matter commissioning)
+# Apply from the connectedhomeip repo root:  git apply matter/patches/connectedhomeip-fake-ble-transport.patch
+# Baseline commit: 6137e72682
+#
+diff --git a/src/platform/Linux/ble/FakeBleTransport.cpp b/src/platform/Linux/ble/FakeBleTransport.cpp
+new file mode 100644
+index 0000000000..4e6485ede8
+--- /dev/null
++++ b/src/platform/Linux/ble/FakeBleTransport.cpp
+@@ -0,0 +1,253 @@
++/*
++ *
++ *    Copyright (c) 2026 Project CHIP Authors
++ *
++ *    Licensed under the Apache License, Version 2.0 (the "License");
++ *    you may not use this file except in compliance with the License.
++ *    You may obtain a copy of the License at
++ *
++ *        http://www.apache.org/licenses/LICENSE-2.0
++ *
++ *    Unless required by applicable law or agreed to in writing, software
++ *    distributed under the License is distributed on an "AS IS" BASIS,
++ *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ *    See the License for the specific language governing permissions and
++ *    limitations under the License.
++ */
++
++#include "FakeBleTransport.h"
++
++#include <arpa/inet.h>
++#include <netinet/in.h>
++#include <netinet/tcp.h>
++#include <sys/socket.h>
++#include <unistd.h>
++
++#include <cerrno>
++#include <cstdlib>
++#include <cstring>
++#include <thread>
++
++#include <lib/support/CodeUtils.h>
++#include <lib/support/logging/CHIPLogging.h>
++
++namespace chip {
++namespace DeviceLayer {
++namespace Internal {
++
++namespace {
++
++// Frame type bytes -- must match src/platform/silabs/efr32/FakeBLETransport.cpp on the device.
++enum class FrameType : uint8_t
++{
++    kConnect      = 0x01,
++    kDisconnect   = 0x02,
++    kWriteRequest = 0x03,
++    kSubscribe    = 0x04,
++    kUnsubscribe  = 0x05,
++    kIndication   = 0x06,
++};
++
++constexpr uint16_t kMaxFramePayload = 512;
++// The fake transport only ever talks to a single peer; use a fixed non-null connection object.
++// BLE_CONNECTION_OBJECT is a typed pointer (BluezConnection*) on the Linux platform, so use that
++// type directly rather than void* (which does not implicitly convert at the BleLayer call sites).
++BLE_CONNECTION_OBJECT const kFakeConnObj = reinterpret_cast<BLE_CONNECTION_OBJECT>(0x1);
++
++int gSocketFd            = -1;
++Ble::BleLayer * gBleLayer = nullptr;
++std::thread * gRxThread   = nullptr;
++
++bool SendFrame(FrameType type, const uint8_t * payload, uint16_t len)
++{
++    if (gSocketFd < 0)
++    {
++        return false;
++    }
++    uint8_t header[3] = { static_cast<uint8_t>(type), static_cast<uint8_t>(len & 0xFF), static_cast<uint8_t>((len >> 8) & 0xFF) };
++    if (write(gSocketFd, header, sizeof(header)) != static_cast<ssize_t>(sizeof(header)))
++    {
++        return false;
++    }
++    if (len > 0 && write(gSocketFd, payload, len) != static_cast<ssize_t>(len))
++    {
++        return false;
++    }
++    return true;
++}
++
++bool BlockingReadExact(uint8_t * buf, size_t length)
++{
++    size_t received = 0;
++    while (received < length)
++    {
++        ssize_t n = read(gSocketFd, buf + received, length - received);
++        if (n <= 0)
++        {
++            return false;
++        }
++        received += static_cast<size_t>(n);
++    }
++    return true;
++}
++
++void RxThreadMain()
++{
++    uint8_t header[3];
++    uint8_t payload[kMaxFramePayload];
++
++    while (BlockingReadExact(header, sizeof(header)))
++    {
++        FrameType type = static_cast<FrameType>(header[0]);
++        uint16_t len   = static_cast<uint16_t>(header[1]) | (static_cast<uint16_t>(header[2]) << 8);
++        VerifyOrDie(len <= kMaxFramePayload);
++        if (len > 0 && !BlockingReadExact(payload, len))
++        {
++            break;
++        }
++
++        if (type == FrameType::kIndication && gBleLayer != nullptr)
++        {
++            System::PacketBufferHandle buf = System::PacketBufferHandle::NewWithData(payload, len, 0, 0);
++            if (!buf.IsNull())
++            {
++                gBleLayer->HandleIndicationReceived(kFakeConnObj, &Ble::CHIP_BLE_SVC_ID, &Ble::CHIP_BLE_CHAR_2_UUID,
++                                                     std::move(buf));
++            }
++        }
++    }
++
++    ChipLogProgress(Ble, "FakeBleTransport: peer connection closed");
++    if (gBleLayer != nullptr)
++    {
++        gBleLayer->HandleConnectionError(kFakeConnObj, CHIP_ERROR_CONNECTION_ABORTED);
++    }
++}
++
++} // namespace
++
++Optional<uint16_t> GetFakeBleTransportPort()
++{
++    const char * portStr = getenv("CHIP_FAKE_BLE_PORT");
++    if (portStr == nullptr || portStr[0] == '\0')
++    {
++        return Optional<uint16_t>::Missing();
++    }
++    return Optional<uint16_t>::Value(static_cast<uint16_t>(atoi(portStr)));
++}
++
++void FakeBleConnectionDelegate::NewConnection(Ble::BleLayer * bleLayer, void * appState, const SetupDiscriminator & /* connDiscriminator */)
++{
++    // Fake transport assumption: there is exactly one known peer (Renode's exposed socket), so
++    // discovery/scanning is skipped entirely -- just connect directly.
++    ChipLogProgress(Ble, "FakeBleTransport: connecting to fake BLE peer on port %u", mPort);
++
++    int fd = socket(AF_INET, SOCK_STREAM, 0);
++    if (fd < 0)
++    {
++        ChipLogError(Ble, "FakeBleTransport: socket() failed: %s", strerror(errno));
++        BleConnectionDelegate::OnConnectionError(appState, CHIP_ERROR_INTERNAL);
++        return;
++    }
++
++    sockaddr_in addr;
++    memset(&addr, 0, sizeof(addr));
++    addr.sin_family = AF_INET;
++    addr.sin_port   = htons(mPort);
++    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
++
++    if (connect(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) != 0)
++    {
++        ChipLogError(Ble, "FakeBleTransport: connect() failed: %s", strerror(errno));
++        close(fd);
++        BleConnectionDelegate::OnConnectionError(appState, CHIP_ERROR_INTERNAL);
++        return;
++    }
++
++    int one = 1;
++    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
++
++    gSocketFd  = fd;
++    gBleLayer  = bleLayer;
++    gRxThread  = new std::thread(RxThreadMain);
++
++    if (!SendFrame(FrameType::kConnect, nullptr, 0))
++    {
++        ChipLogError(Ble, "FakeBleTransport: failed to send CONNECT frame");
++        BleConnectionDelegate::OnConnectionError(appState, CHIP_ERROR_INTERNAL);
++        return;
++    }
++
++    // The device gates its outgoing indications (including the BTP handshake response) on an active
++    // C2 subscription. In real CHIPoBLE the central enables C2 indications during connection setup;
++    // over the fake pipe there is no GATT/CCCD layer, so proactively announce the subscription right
++    // after connecting -- before the BTP handshake WRITE -- so the device can indicate back.
++    if (!SendFrame(FrameType::kSubscribe, nullptr, 0))
++    {
++        ChipLogError(Ble, "FakeBleTransport: failed to send SUBSCRIBE frame");
++        BleConnectionDelegate::OnConnectionError(appState, CHIP_ERROR_INTERNAL);
++        return;
++    }
++
++    ChipLogProgress(Ble, "FakeBleTransport: connected");
++    BleConnectionDelegate::OnConnectionComplete(appState, kFakeConnObj);
++}
++
++void FakeBleConnectionDelegate::NewConnection(Ble::BleLayer * bleLayer, void * appState, BLE_CONNECTION_OBJECT /* connObj */)
++{
++    // Reconnecting to an already-known object is equivalent to a fresh connect in this harness.
++    SetupDiscriminator unused;
++    NewConnection(bleLayer, appState, unused);
++}
++
++CHIP_ERROR FakeBleConnectionDelegate::CancelConnection()
++{
++    return CHIP_NO_ERROR;
++}
++
++CHIP_ERROR FakeBlePlatformDelegate::SubscribeCharacteristic(BLE_CONNECTION_OBJECT /* connObj */, const Ble::ChipBleUUID * /* svcId */,
++                                                            const Ble::ChipBleUUID * /* charId */)
++{
++    return SendFrame(FrameType::kSubscribe, nullptr, 0) ? CHIP_NO_ERROR : CHIP_ERROR_INTERNAL;
++}
++
++CHIP_ERROR FakeBlePlatformDelegate::UnsubscribeCharacteristic(BLE_CONNECTION_OBJECT /* connObj */,
++                                                              const Ble::ChipBleUUID * /* svcId */,
++                                                              const Ble::ChipBleUUID * /* charId */)
++{
++    return SendFrame(FrameType::kUnsubscribe, nullptr, 0) ? CHIP_NO_ERROR : CHIP_ERROR_INTERNAL;
++}
++
++CHIP_ERROR FakeBlePlatformDelegate::CloseConnection(BLE_CONNECTION_OBJECT /* connObj */)
++{
++    SendFrame(FrameType::kDisconnect, nullptr, 0);
++    if (gSocketFd >= 0)
++    {
++        close(gSocketFd);
++        gSocketFd = -1;
++    }
++    return CHIP_NO_ERROR;
++}
++
++uint16_t FakeBlePlatformDelegate::GetMTU(BLE_CONNECTION_OBJECT /* connObj */) const
++{
++    return 247;
++}
++
++CHIP_ERROR FakeBlePlatformDelegate::SendIndication(BLE_CONNECTION_OBJECT /* connObj */, const Ble::ChipBleUUID * /* svcId */,
++                                                   const Ble::ChipBleUUID * /* charId */, System::PacketBufferHandle /* pBuf */)
++{
++    // The controller never indicates to the device in CHIPoBLE -- only the peripheral does.
++    return CHIP_ERROR_NOT_IMPLEMENTED;
++}
++
++CHIP_ERROR FakeBlePlatformDelegate::SendWriteRequest(BLE_CONNECTION_OBJECT /* connObj */, const Ble::ChipBleUUID * /* svcId */,
++                                                     const Ble::ChipBleUUID * /* charId */, System::PacketBufferHandle pBuf)
++{
++    bool ok = SendFrame(FrameType::kWriteRequest, pBuf->Start(), static_cast<uint16_t>(pBuf->DataLength()));
++    return ok ? CHIP_NO_ERROR : CHIP_ERROR_INTERNAL;
++}
++
++} // namespace Internal
++} // namespace DeviceLayer
++} // namespace chip
+diff --git a/src/platform/Linux/ble/FakeBleTransport.h b/src/platform/Linux/ble/FakeBleTransport.h
+new file mode 100644
+index 0000000000..59245d0a99
+--- /dev/null
++++ b/src/platform/Linux/ble/FakeBleTransport.h
+@@ -0,0 +1,72 @@
++/*
++ *
++ *    Copyright (c) 2026 Project CHIP Authors
++ *
++ *    Licensed under the Apache License, Version 2.0 (the "License");
++ *    you may not use this file except in compliance with the License.
++ *    You may obtain a copy of the License at
++ *
++ *        http://www.apache.org/licenses/LICENSE-2.0
++ *
++ *    Unless required by applicable law or agreed to in writing, software
++ *    distributed under the License is distributed on an "AS IS" BASIS,
++ *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ *    See the License for the specific language governing permissions and
++ *    limitations under the License.
++ */
++
++/**
++ * @file
++ *   Software-only BLE central used to commission a Matter device running inside the Renode
++ *   emulator, bypassing BlueZ/real BLE entirely. Talks to the device's FakeBLETransport
++ *   (src/platform/silabs/efr32/FakeBLETransport.cpp) over a TCP socket exposed by Renode's
++ *   `CreateServerSocketTerminal`, using the same framed byte protocol.
++ *
++ *   Activated only when CHIP_FAKE_BLE_PORT is set in the environment (see
++ *   MaybeGetFakeBleHostPort() / --fake-ble-port in chip-tool's pairing command).
++ */
++
++#pragma once
++
++#include <ble/Ble.h>
++#include <lib/core/Optional.h>
++
++namespace chip {
++namespace DeviceLayer {
++namespace Internal {
++
++// Returns the port to connect to if the fake BLE transport should be used for this run (set via
++// CHIP_FAKE_BLE_PORT env var or chip-tool's --fake-ble-port), or nullopt for the real BLE path.
++Optional<uint16_t> GetFakeBleTransportPort();
++
++class FakeBleConnectionDelegate : public Ble::BleConnectionDelegate
++{
++public:
++    explicit FakeBleConnectionDelegate(uint16_t port) : mPort(port) {}
++
++    void NewConnection(Ble::BleLayer * bleLayer, void * appState, const SetupDiscriminator & connDiscriminator) override;
++    void NewConnection(Ble::BleLayer * bleLayer, void * appState, BLE_CONNECTION_OBJECT connObj) override;
++    CHIP_ERROR CancelConnection() override;
++
++private:
++    uint16_t mPort;
++};
++
++class FakeBlePlatformDelegate : public Ble::BlePlatformDelegate
++{
++public:
++    CHIP_ERROR SubscribeCharacteristic(BLE_CONNECTION_OBJECT connObj, const Ble::ChipBleUUID * svcId,
++                                       const Ble::ChipBleUUID * charId) override;
++    CHIP_ERROR UnsubscribeCharacteristic(BLE_CONNECTION_OBJECT connObj, const Ble::ChipBleUUID * svcId,
++                                         const Ble::ChipBleUUID * charId) override;
++    CHIP_ERROR CloseConnection(BLE_CONNECTION_OBJECT connObj) override;
++    uint16_t GetMTU(BLE_CONNECTION_OBJECT connObj) const override;
++    CHIP_ERROR SendIndication(BLE_CONNECTION_OBJECT connObj, const Ble::ChipBleUUID * svcId, const Ble::ChipBleUUID * charId,
++                              System::PacketBufferHandle pBuf) override;
++    CHIP_ERROR SendWriteRequest(BLE_CONNECTION_OBJECT connObj, const Ble::ChipBleUUID * svcId, const Ble::ChipBleUUID * charId,
++                                System::PacketBufferHandle pBuf) override;
++};
++
++} // namespace Internal
++} // namespace DeviceLayer
++} // namespace chip
+diff --git a/src/platform/silabs/BLEManagerImpl.h b/src/platform/silabs/BLEManagerImpl.h
+index 20331c8cad..c2b964c7bb 100644
+--- a/src/platform/silabs/BLEManagerImpl.h
++++ b/src/platform/silabs/BLEManagerImpl.h
+@@ -74,6 +74,16 @@ public:
+     CHIP_ERROR StartAdvertising(void);
+     CHIP_ERROR StopAdvertising(void);
+ 
++#if CHIP_DEVICE_CONFIG_ENABLE_FAKE_BLE_TRANSPORT
++    // Renode test harness: drives the CHIPoBLE state machine from a byte-stream transport
++    // (see examples/platform/silabs/efr32/FakeBLETransport.cpp) instead of the real sl_bt stack,
++    // so commissioning can be exercised against firmware running inside the Renode emulator.
++    void InitFakeBLETransport(void);
++    void FakeBLEHandleFrame(uint8_t type, const uint8_t * payload, uint16_t len);
++    CHIP_ERROR SendFakeIndication(BLE_CONNECTION_OBJECT conId, const Ble::ChipBleUUID * svcId, const Ble::ChipBleUUID * charId,
++                                  System::PacketBufferHandle pBuf);
++#endif // CHIP_DEVICE_CONFIG_ENABLE_FAKE_BLE_TRANSPORT
++
+ #if CHIP_ENABLE_ADDITIONAL_DATA_ADVERTISING
+ #if defined(SLI_SI91X_ENABLE_BLE) && SLI_SI91X_ENABLE_BLE
+     static void HandleC3ReadRequest(const SilabsBleWrapper::sl_wfx_msg_t & rsi_ble_read_req);
+diff --git a/src/platform/silabs/efr32/BLEManagerImpl.cpp b/src/platform/silabs/efr32/BLEManagerImpl.cpp
+index e7603b4ddc..1079277288 100644
+--- a/src/platform/silabs/efr32/BLEManagerImpl.cpp
++++ b/src/platform/silabs/efr32/BLEManagerImpl.cpp
+@@ -328,6 +328,9 @@ uint16_t BLEManagerImpl::GetMTU(BLE_CONNECTION_OBJECT conId) const
+ CHIP_ERROR BLEManagerImpl::SendIndication(BLE_CONNECTION_OBJECT conId, const ChipBleUUID * svcId, const ChipBleUUID * charId,
+                                           PacketBufferHandle data)
+ {
++#if CHIP_DEVICE_CONFIG_ENABLE_FAKE_BLE_TRANSPORT
++    return SendFakeIndication(conId, svcId, charId, std::move(data));
++#else
+     CHIP_ERROR err              = CHIP_NO_ERROR;
+     CHIPoBLEConState * conState = GetConnectionState(conId);
+     sl_status_t ret;
+@@ -345,6 +348,7 @@ CHIP_ERROR BLEManagerImpl::SendIndication(BLE_CONNECTION_OBJECT conId, const Chi
+ 
+ exit:
+     return err;
++#endif // CHIP_DEVICE_CONFIG_ENABLE_FAKE_BLE_TRANSPORT
+ }
+ 
+ CHIP_ERROR BLEManagerImpl::SendWriteRequest(BLE_CONNECTION_OBJECT conId, const ChipBleUUID * svcId, const ChipBleUUID * charId,
+@@ -672,6 +676,9 @@ void BLEManagerImpl::UpdateMtu(volatile sl_bt_msg_t * evt)
+ void BLEManagerImpl::HandleBootEvent(void)
+ {
+     mFlags.Set(Flags::kSiLabsBLEStackInitialize);
++#if CHIP_DEVICE_CONFIG_ENABLE_FAKE_BLE_TRANSPORT
++    InitFakeBLETransport();
++#endif
+     TEMPORARY_RETURN_IGNORED PlatformMgr().ScheduleWork(DriveBLEState, 0);
+ }
+ 
+diff --git a/src/platform/silabs/efr32/BUILD.gn b/src/platform/silabs/efr32/BUILD.gn
+index 9b728bcc03..bfdacab175 100644
+--- a/src/platform/silabs/efr32/BUILD.gn
++++ b/src/platform/silabs/efr32/BUILD.gn
+@@ -24,6 +24,12 @@ import("${matter_support_root}/provision/args.gni")
+ 
+ assert(chip_device_platform == "efr32")
+ 
++declare_args() {
++  # Renode test harness: drive CHIPoBLE from a byte-stream transport on EUSART1 instead of the
++  # real sl_bt stack. See src/platform/silabs/efr32/FakeBLETransport.cpp.
++  chip_enable_fake_ble_transport = false
++}
++
+ if (chip_enable_thread) {
+   import("//build_overrides/openthread.gni")
+ }
+@@ -87,6 +93,10 @@ static_library("efr32") {
+     ]
+   } else {
+     sources += [ "BLEManagerImpl.cpp" ]
++    if (chip_enable_fake_ble_transport) {
++      sources += [ "FakeBLETransport.cpp" ]
++      defines = [ "CHIP_DEVICE_CONFIG_ENABLE_FAKE_BLE_TRANSPORT=1" ]
++    }
+   }
+   deps = [
+     "${chip_root}/src/app/common:ids",
+diff --git a/src/platform/silabs/efr32/FakeBLETransport.cpp b/src/platform/silabs/efr32/FakeBLETransport.cpp
+new file mode 100644
+index 0000000000..38e56ba826
+--- /dev/null
++++ b/src/platform/silabs/efr32/FakeBLETransport.cpp
+@@ -0,0 +1,260 @@
++/*
++ *
++ *    Copyright (c) 2026 Project CHIP Authors
++ *
++ *    Licensed under the Apache License, Version 2.0 (the "License");
++ *    you may not use this file except in compliance with the License.
++ *    You may obtain a copy of the License at
++ *
++ *        http://www.apache.org/licenses/LICENSE-2.0
++ *
++ *    Unless required by applicable law or agreed to in writing, software
++ *    distributed under the License is distributed on an "AS IS" BASIS,
++ *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ *    See the License for the specific language governing permissions and
++ *    limitations under the License.
++ */
++
++/**
++ * @file
++ *   Software-only CHIPoBLE transport used when running the lighting-app firmware
++ *   inside the Renode emulator (no real Silicon Labs Bluetooth stack/radio involved).
++ *
++ *   Drives the BLEManagerImpl state machine from a simple framed byte stream on
++ *   EUSART1 instead of real sl_bt GATT events. The frame format is:
++ *     [1 byte type][2 bytes length, little-endian][payload...]
++ *   type: 0x01 CONNECT, 0x02 DISCONNECT, 0x03 WRITE_REQUEST (C1),
++ *         0x04 SUBSCRIBE, 0x05 UNSUBSCRIBE, 0x06 INDICATION (C2)
++ *   The matching host-side implementation lives in
++ *   src/platform/Linux/ble/FakeBleTransport.cpp (chip-tool).
++ *
++ *   Only ever compiled in when CHIP_DEVICE_CONFIG_ENABLE_FAKE_BLE_TRANSPORT=1.
++ */
++
++#include <platform/internal/CHIPDeviceLayerInternal.h>
++#if CHIP_DEVICE_CONFIG_ENABLE_CHIPOBLE && CHIP_DEVICE_CONFIG_ENABLE_FAKE_BLE_TRANSPORT
++
++#include "sl_component_catalog.h"
++
++#include <platform/internal/BLEManager.h>
++
++#include "FreeRTOS.h"
++#include "em_eusart.h"
++#include "uartdrv.h"
++#include <cmsis_os2.h>
++#include <lib/support/CodeUtils.h>
++#include <lib/support/logging/CHIPLogging.h>
++
++using namespace chip::Ble;
++using namespace chip::System;
++
++namespace chip {
++namespace DeviceLayer {
++namespace Internal {
++
++namespace {
++
++// Fixed single-connection handle: the fake transport only ever talks to one peer.
++constexpr uint8_t kFakeConnHandle = 1;
++
++// Frame type bytes -- must match src/platform/Linux/ble/FakeBleTransport.cpp on the host.
++enum class FrameType : uint8_t
++{
++    kConnect       = 0x01,
++    kDisconnect    = 0x02,
++    kWriteRequest  = 0x03,
++    kSubscribe     = 0x04,
++    kUnsubscribe   = 0x05,
++    kIndication    = 0x06,
++};
++
++constexpr uint16_t kMaxFramePayload = 512;
++
++// Second UARTDRV instance, hand-instantiated (no SLC-generated config): EUSART1 is unused by
++// every board this test setup targets, and pin routing is irrelevant since this only ever
++// runs against Renode's register-level EUSART model, never real silicon.
++DEFINE_BUF_QUEUE(8, sFakeBleRxBuffer);
++DEFINE_BUF_QUEUE(8, sFakeBleTxBuffer);
++UARTDRV_HandleData_t sFakeBleUartHandleData;
++UARTDRV_Handle_t sFakeBleUartHandle = &sFakeBleUartHandleData;
++
++UARTDRV_InitEuart_t sFakeBleUartInit = {
++    .port                = EUSART1,
++    .useLowFrequencyMode = false,
++    .baudRate            = 115200,
++    .txPort              = SL_GPIO_PORT_C,
++    .rxPort              = SL_GPIO_PORT_C,
++    .txPin               = 0,
++    .rxPin               = 1,
++    .uartNum             = 1,
++    .stopBits            = eusartStopbits1,
++    .parity              = eusartNoParity,
++    .oversampling        = eusartOVS16,
++    .mvdis               = eusartMajorityVoteEnable,
++    .fcType              = uartdrvFlowControlNone,
++    .ctsPort             = SL_GPIO_PORT_C,
++    .ctsPin              = 2,
++    .rtsPort             = SL_GPIO_PORT_C,
++    .rtsPin              = 3,
++    .rxQueue             = (UARTDRV_Buffer_FifoQueue_t *) &sFakeBleRxBuffer,
++    .txQueue             = (UARTDRV_Buffer_FifoQueue_t *) &sFakeBleTxBuffer,
++};
++
++osThreadId_t sFakeBleTaskHandle;
++constexpr uint32_t kFakeBleTaskStackSize = 2048;
++uint8_t sFakeBleTaskStack[kFakeBleTaskStackSize];
++osThread_t sFakeBleTaskControlBlock;
++constexpr osThreadAttr_t kFakeBleTaskAttr = {
++    .name       = "FakeBLE",
++    .attr_bits  = osThreadDetached,
++    .cb_mem     = &sFakeBleTaskControlBlock,
++    .cb_size    = osThreadCbSize,
++    .stack_mem  = sFakeBleTaskStack,
++    .stack_size = kFakeBleTaskStackSize,
++    .priority   = osPriorityRealtime6,
++};
++
++// Blocking read of exactly `length` bytes. UARTDRV's callback-based Receive() is overkill for a
++// test harness talking to a reliable local socket-backed UART -- poll instead.
++void BlockingRead(uint8_t * buf, uint16_t length)
++{
++    while (UARTDRV_ReceiveB(sFakeBleUartHandle, buf, static_cast<UARTDRV_Count_t>(length)) != ECODE_EMDRV_UARTDRV_OK)
++    {
++        // Retry: the fake transport is a test harness, not a real-time path.
++    }
++}
++
++void FakeBLETransportTaskMain(void * arg)
++{
++    uint8_t header[3];
++    uint8_t payload[kMaxFramePayload];
++
++    while (true)
++    {
++        BlockingRead(header, sizeof(header));
++        uint8_t type   = header[0];
++        uint16_t plen  = static_cast<uint16_t>(header[1]) | (static_cast<uint16_t>(header[2]) << 8);
++        VerifyOrDie(plen <= kMaxFramePayload);
++        if (plen > 0)
++        {
++            BlockingRead(payload, plen);
++        }
++
++        BLEMgrImpl().FakeBLEHandleFrame(type, payload, plen);
++    }
++}
++
++} // namespace
++
++void BLEManagerImpl::InitFakeBLETransport(void)
++{
++    if (sFakeBleTaskHandle != nullptr)
++    {
++        return; // already initialized
++    }
++
++    UARTDRV_InitEuart(sFakeBleUartHandle, &sFakeBleUartInit);
++
++    sFakeBleTaskHandle = osThreadNew(FakeBLETransportTaskMain, nullptr, &kFakeBleTaskAttr);
++    VerifyOrDie(sFakeBleTaskHandle != nullptr);
++
++    ChipLogProgress(DeviceLayer, "FakeBLETransport: listening on EUSART1 for CHIPoBLE frames");
++}
++
++void BLEManagerImpl::FakeBLEHandleFrame(uint8_t rawType, const uint8_t * payload, uint16_t len)
++{
++    FrameType type = static_cast<FrameType>(rawType);
++    ChipDeviceEvent event;
++
++    switch (type)
++    {
++    case FrameType::kConnect: {
++        ChipLogProgress(DeviceLayer, "FakeBLETransport: CONNECT");
++        AddConnection(kFakeConnHandle, 0);
++        TEMPORARY_RETURN_IGNORED PlatformMgr().ScheduleWork(DriveBLEState, 0);
++        break;
++    }
++
++    case FrameType::kDisconnect: {
++        ChipLogProgress(DeviceLayer, "FakeBLETransport: DISCONNECT");
++        if (RemoveConnection(kFakeConnHandle))
++        {
++            event.Type                           = DeviceEventType::kCHIPoBLEConnectionError;
++            event.CHIPoBLEConnectionError.ConId  = kFakeConnHandle;
++            event.CHIPoBLEConnectionError.Reason = BLE_ERROR_REMOTE_DEVICE_DISCONNECTED;
++            PlatformMgr().PostEventOrDie(&event);
++
++            mFlags.Set(Flags::kRestartAdvertising);
++            mFlags.Set(Flags::kFastAdvertisingEnabled);
++            TEMPORARY_RETURN_IGNORED PlatformMgr().ScheduleWork(DriveBLEState, 0);
++        }
++        break;
++    }
++
++    case FrameType::kWriteRequest: {
++        PacketBufferHandle buf = PacketBufferHandle::NewWithData(payload, len, 0, 0);
++        VerifyOrReturn(!buf.IsNull(), ChipLogError(DeviceLayer, "FakeBLETransport: OOM on write request"));
++
++        ChipLogDetail(DeviceLayer, "FakeBLETransport: WRITE_REQUEST len=%u", len);
++        event.Type                       = DeviceEventType::kCHIPoBLEWriteReceived;
++        event.CHIPoBLEWriteReceived.ConId = kFakeConnHandle;
++        event.CHIPoBLEWriteReceived.Data  = std::move(buf).UnsafeRelease();
++        CHIP_ERROR err                    = PlatformMgr().PostEvent(&event);
++        if (err != CHIP_NO_ERROR)
++        {
++            ChipLogError(DeviceLayer, "FakeBLETransport: PostEvent(WriteReceived) failed: %" CHIP_ERROR_FORMAT, err.Format());
++        }
++        break;
++    }
++
++    case FrameType::kSubscribe:
++    case FrameType::kUnsubscribe: {
++        bool subscribe               = (type == FrameType::kSubscribe);
++        CHIPoBLEConState * connState = GetConnectionState(kFakeConnHandle);
++        VerifyOrReturn(connState != nullptr,
++                        ChipLogError(DeviceLayer, "FakeBLETransport: %s with no active connection", subscribe ? "SUBSCRIBE" : "UNSUBSCRIBE"));
++
++        ChipLogDetail(DeviceLayer, "FakeBLETransport: %s", subscribe ? "SUBSCRIBE" : "UNSUBSCRIBE");
++        connState->subscribed          = subscribe ? 1 : 0;
++        event.Type                     = subscribe ? DeviceEventType::kCHIPoBLESubscribe : DeviceEventType::kCHIPoBLEUnsubscribe;
++        event.CHIPoBLESubscribe.ConId  = kFakeConnHandle;
++        CHIP_ERROR err                 = PlatformMgr().PostEvent(&event);
++        if (err != CHIP_NO_ERROR)
++        {
++            ChipLogError(DeviceLayer, "FakeBLETransport: PostEvent(Subscribe) failed: %" CHIP_ERROR_FORMAT, err.Format());
++        }
++        break;
++    }
++
++    default:
++        ChipLogError(DeviceLayer, "FakeBLETransport: unknown frame type 0x%02x", rawType);
++        break;
++    }
++}
++
++CHIP_ERROR BLEManagerImpl::SendFakeIndication(BLE_CONNECTION_OBJECT conId, const ChipBleUUID * svcId, const ChipBleUUID * charId,
++                                              PacketBufferHandle data)
++{
++    CHIPoBLEConState * conState = GetConnectionState(conId);
++    VerifyOrReturnError((conState != nullptr) && (conState->subscribed != 0), CHIP_ERROR_INVALID_ARGUMENT);
++
++    uint8_t header[3];
++    header[0] = static_cast<uint8_t>(FrameType::kIndication);
++    header[1] = static_cast<uint8_t>(data->DataLength() & 0xFF);
++    header[2] = static_cast<uint8_t>((data->DataLength() >> 8) & 0xFF);
++
++    UARTDRV_ForceTransmit(sFakeBleUartHandle, header, sizeof(header));
++    UARTDRV_ForceTransmit(sFakeBleUartHandle, data->Start(), static_cast<UARTDRV_Count_t>(data->DataLength()));
++
++    // The fake transport is a reliable in-order pipe, so acknowledge the indication immediately
++    // instead of waiting on a real ATT confirmation round-trip.
++    HandleTxConfirmationEvent(conId);
++
++    return CHIP_NO_ERROR;
++}
++
++} // namespace Internal
++} // namespace DeviceLayer
++} // namespace chip
++
++#endif // CHIP_DEVICE_CONFIG_ENABLE_CHIPOBLE && CHIP_DEVICE_CONFIG_ENABLE_FAKE_BLE_TRANSPORT

@@ -1,0 +1,53 @@
+:name: Matter fake-transport commissioning
+:description: Boot a SiLabs Matter lighting-app built with the software "fake" CHIPoBLE transport and expose the commissioning socket for a host chip-tool. The BLE radio/PHY is bypassed; commissioning (PASE + Thread-dataset provisioning) rides a framed byte stream on EUSART1.
+
+# ---------------------------------------------------------------------------
+# Parameters -- override before `include`-ing this script, e.g.:
+#   $bin=@/path/to/matter-silabs-lighting-example.out
+#   $repl=@platforms/boards/silabs/brd4186c.repl
+#   $transport_port=3500
+#   include @scripts/complex/silabs/matter-fake-transport.resc
+# ---------------------------------------------------------------------------
+$name?="matter"
+$repl?=@platforms/boards/silabs/brd2601b.repl
+# Default points at the connectedhomeip build output (see matter/README.md for the build recipe).
+$bin?=@/Volumes/Tools/connectedhomeip/out/lighting-fake-ble/thread/BRD2601B/matter-silabs-lighting-example.out
+$transport_port?=3500
+
+mach create $name
+machine LoadPlatformDescription $repl
+sysbus LoadELF $bin
+
+# Fake CHIPoBLE transport.
+# The firmware's FakeBLETransport task (built with chip_enable_fake_ble_transport=true) reads and
+# writes framed CHIPoBLE frames -- [1B type][2B len LE][payload] -- on EUSART1 (115200 8N1, no flow
+# control) instead of the real sl_bt GATT stack. Renode hosts the TCP server; the patched host
+# chip-tool connects as a client via CHIP_FAKE_BLE_PORT=$transport_port.
+# Binary mode (false) => byte-transparent bridge, no telnet escaping.
+emulation CreateServerSocketTerminal $transport_port "fake_transport" false
+connector Connect sysbus.eusart1 fake_transport
+
+# One deterministic time domain, run in REAL TIME so the host chip-tool's wall-clock MRP/PASE
+# retransmit timers line up with the emulated device. This needs no LD_PRELOAD shim and works on
+# macOS. (AdvanceImmediately=false is the real-time default; set here explicitly for clarity.)
+emulation SetGlobalSerialExecution true
+emulation SetGlobalAdvanceImmediately false
+emulation SetGlobalQuantum "0.0001"
+
+# --- Optional: Linux virtual-time mode ------------------------------------
+# Instead of real time, slave the host chip-tool's clock to Renode's virtual time by running it
+# under tools/external_control_client/lib/librenode_api.so with RENODE_PORT=3456. Uncomment:
+#   emulation CreateExternalControlServer "matter_ctrl" 3456
+# Note: the shim overrides clock_gettime/gettimeofday only (not poll/select), so real-time above
+# is the more robust default.
+# --------------------------------------------------------------------------
+
+logLevel 2
+
+start
+
+echo ""
+echo "Matter fake-transport ready. Commission from the host with a fake-transport-patched chip-tool:"
+echo "  CHIP_FAKE_BLE_PORT=<port> chip-tool pairing ble-thread <node-id> hex:<dataset> <pin> <discriminator>"
+echo "(the socket port is the $transport_port argument passed to CreateServerSocketTerminal above)"
+echo ""
