@@ -18,7 +18,9 @@ rm -f "$HOME"/.matter* /tmp/chip_* tmp/*.flash /tmp/*.flash 2>/dev/null
 sleep 2
 
 echo "### 1) Renode (stock fw + bridges)"
-setsid bash -c "timeout 260 ./renode --disable-xwt --hide-log --port 3456 matter/renode-thread/scenarios/e2e-15.4.resc >/tmp/renode-stdout.log 2>&1" &
+SCENARIO="${SCENARIO:-matter/renode-thread/scenarios/e2e-15.4.resc}"
+echo "    scenario: $SCENARIO"
+setsid bash -c "timeout 260 ./renode --disable-xwt --hide-log --port 3456 $SCENARIO >/tmp/renode-stdout.log 2>&1" &
 for i in $(seq 1 45); do grep -q "CHIPoBLE GATT ready" "$RLOG" 2>/dev/null && break; sleep 1; done
 echo "    GATT ready: $(grep -c 'CHIPoBLE GATT ready' "$RLOG")"
 
@@ -31,10 +33,15 @@ CHIP_FAKE_BLE_PORT=3500 timeout 120 "$CHIP" pairing ble-thread 1 "hex:$DATASET" 
     --bypass-attestation-verifier true >/tmp/pairing-native.log 2>&1 &
 
 echo "### 4) wait for the device to attach (child table entry)"
+# Parse the RLOC16 from an actual child-table data row ("|  <id> | 0xXXXX | <timeout> | <age> | ...");
+# a child's RLOC never ends in 00 (that's a router/leader). Take the most recent, and require it to be
+# present in TWO consecutive reads so we don't ping a transient/half-attached address.
+extract_child() { grep -oE "\| +[0-9]+ \| 0x[0-9a-f]{4} \| +[0-9]+ \| +[0-9]+ \|" "$LEADLOG" 2>/dev/null \
+    | grep -oE "0x[0-9a-f]{4}" | grep -vE "00$" | tail -1; }
 DEVRLOC=""
 for i in $(seq 1 75); do
-    DEVRLOC=$(grep -oE "0x[0-9a-f]{4}" "$LEADLOG" 2>/dev/null | grep -vE "00$" | sort -u | head -1)
-    [ -n "$DEVRLOC" ] && break
+    r1=$(extract_child)
+    if [ -n "$r1" ]; then sleep 3; r2=$(extract_child); [ "$r1" = "$r2" ] && { DEVRLOC="$r1"; break; }; fi
     sleep 2
 done
 if [ -z "$DEVRLOC" ]; then echo "    FAILED: device never appeared in leader table"; else echo "    device attached, RLOC16=$DEVRLOC"; fi
