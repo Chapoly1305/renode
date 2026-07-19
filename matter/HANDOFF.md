@@ -1,5 +1,12 @@
 # Matter fake-transport commissioning — status & handoff
 
+> ⛔ **RETIRED (2026-07-19).** The real requirement is to commission the device firmware **exactly as
+> shipped — no recompile, no compile flags, no source edits (stripped binary).** The entire fake-transport
+> approach documented below required *modifying and recompiling the device*, so it does NOT meet the
+> constraint and is retired (kept for reference only). The one piece that carries forward is the
+> emulator-side Renode Secure-Engine model. For the correct, compliant scope and the per-firmware inputs a
+> user must provide, see **`STOCK_FIRMWARE_REQUIREMENTS.md`**.
+
 _Last updated: 2026-07-19_
 
 Goal: drive a host `chip-tool` to (1) **commission** a SiLabs Matter lighting-app running in Renode over
