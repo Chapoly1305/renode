@@ -1,0 +1,18 @@
+# e2e-15.4 + periodic SEGGER-RTT drain of the stock firmware's console -> /tmp/rtt.log
+# (to see the device's Matter/OpenThread logs: why it does/doesn't advertise operational).
+mach create "stock"
+machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
+machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
+sysbus LoadELF @matter/brd2601b-matter-silabs-lighting-example.out
+cpu PerformanceInMips 39
+seqcpu PerformanceInMips 39
+emulation CreateBLEMedium "wireless"
+connector Connect sysbus.radio wireless
+connector Connect sysbus.bleCentral wireless
+connector Connect sysbus.ieee802154 wireless
+emulation SetGlobalSerialExecution true
+emulation SetGlobalAdvanceImmediately false
+logFile @/tmp/renode-15.4.log true
+logLevel 2
+machine ExecutePythonEveryFromFile "rttdrain" 2000 @matter/renode-thread/scenarios/rtt_drain.py
+start
