@@ -1,0 +1,21 @@
+# Radio-level correlation: for the 126B+106B Child ID Response fragment pair, is the 2nd fragment (106B) DROPPED
+# because the device is transmitting its MAC-ACK of the 1st fragment (half-duplex) when the bridge injects it?
+# logLevel 1 sysbus.radio surfaces "Received"/"Dropping"/"Sending frame"; ieee802154 verbose logs each injected MPDU.
+mach create "stock"
+machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
+machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
+sysbus LoadELF @matter/brd2601b-matter-silabs-lighting-example.out
+cpu PerformanceInMips 39
+seqcpu PerformanceInMips 39
+emulation CreateBLEMedium "wireless"
+connector Connect sysbus.radio wireless
+connector Connect sysbus.bleCentral wireless
+connector Connect sysbus.ieee802154 wireless
+emulation SetGlobalSerialExecution true
+emulation SetGlobalAdvanceImmediately false
+logFile @/tmp/renode-15.4.log true
+logLevel 2
+logLevel 1 sysbus.radio
+cpu AddHook 0x080585ca "open('/tmp/mle-cmd','a').write(str(cpu.GetRegister(3).RawValue)+'\n')"
+cpu AddHook 0x080572bc "open('/tmp/mle-b-ChildIdResp','a').write('.')"
+start

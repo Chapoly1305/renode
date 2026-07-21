@@ -52,35 +52,27 @@ cat > "$RUN/dbus.conf" <<EOF
 EOF
 dbus-daemon --config-file="$RUN/dbus.conf" --fork; sleep 0.5
 
-echo "### 3) otbr-agent (ot-rcp node 3) with LOW leaderweight -> will JOIN the device's partition"
+echo "### 3) otbr-agent (ot-rcp node 3) as NORMAL Thread LEADER + Border Router (device will JOIN it)"
 "$OTBR_AGENT" -I wpan0 -B infra0 -d7 -v -s --vendor-name Renode --model-name RenodeSim \
     --data-path "$RUN" "spinel+hdlc+forkpty://$OT_RCP?forkpty-arg=3" > "$ALOG" 2>&1 &
 AGENT_PID=$!
 sleep 4
 "$OT_CTL" dataset set active "$DATASET" >/dev/null 2>&1
-"$OT_CTL" leaderweight 1 >/dev/null 2>&1        # lose leader election to the device (weight 64)
-"$OT_CTL" routerselectionjitter 1 >/dev/null 2>&1  # upgrade to router fast once merged into the device
+"$OT_CTL" leaderweight 128 >/dev/null 2>&1      # NORMAL: otbr is the STRONG leader (beats device weight 64)
 "$OT_CTL" ifconfig up >/dev/null 2>&1
-# DETERMINISTIC CONVERGENCE: do NOT thread-start otbr yet. Start it only AFTER the device has commissioned
-# to ThreadNetworkEnable and self-partitioned to LEADER, so otbr's AnyPartition attach joins the device's
-# (only) partition every time — no leader-election race.
-echo "    otbr initial: state=$("$OT_CTL" state 2>/dev/null|head -1|tr -d '[:space:]') weight=$("$OT_CTL" leaderweight 2>/dev/null|head -1|tr -d '[:space:]') (thread NOT started yet)"
+"$OT_CTL" thread start >/dev/null 2>&1          # NORMAL: otbr forms the network + becomes Leader+BR UP FRONT
+# wait for otbr to become leader, then (as BR) publish the OMR prefix so joiners SLAAC an OMR + enable SRP server
+for i in $(seq 1 25); do st=$("$OT_CTL" state 2>/dev/null|head -1|tr -d '[:space:]'); [ "$st" = leader ] && break; sleep 1; done
+"$OT_CTL" srp server enable >/dev/null 2>&1
+"$OT_CTL" prefix add fd0d:b0b0:cafe:1::/64 paos med >/dev/null 2>&1
+"$OT_CTL" netdata register >/dev/null 2>&1
+echo "    otbr initial: state=$("$OT_CTL" state 2>/dev/null|head -1|tr -d '[:space:]') (Leader+BR up, OMR published; the device will attach to it as a child/router)"
 
-# live sampler: watch otbr MERGE into the device's partition + the device register SRP.
+# NORMAL: background ot-ctl sampler DISABLED -- concurrent ot-ctl polling contends with the attach-check on
+# otbr's single daemon socket ("Connection reset by peer" -> garbled state reads -> false "disabled"/attached=0).
+# All ot-ctl reads are now serialized in the main flow.
 LIVE=/tmp/flip-live.log; : > "$LIVE"
-( while true; do
-    ts=$(printf '%(%H:%M:%S)T' -1)
-    st=$("$OT_CTL" state 2>/dev/null|head -1|tr -d '[:space:]')
-    pid=$("$OT_CTL" partitionid 2>/dev/null|head -1|tr -d '[:space:]')
-    ldr=$("$OT_CTL" leader 2>/dev/null | grep -iE "rloc|weight" | tr '\n' ' ')
-    s=$("$OT_CTL" srp server service 2>/dev/null | grep -icE "instance|_matter|\._udp|\._tcp")
-    h=$("$OT_CTL" srp server host 2>/dev/null | grep -icE "\.default|fd[0-9a-f]{2}:")
-    omr=$("$OT_CTL" netdata show 2>/dev/null | grep -oE "fd[0-9a-f:]+/64 pa[a-z]*" | grep -viE "^fd61:f77b:d3df" | head -1)
-    echo "[$ts] otbr_state=$st partition=$pid OMR=${omr:-none} srp_svc=$s srp_host=$h | $ldr" >> "$LIVE"
-    [ "$s" -gt 0 ] && echo "  *** DEVICE REGISTERED ITS MATTER SRP SERVICE @ $ts ***" >> "$LIVE"
-    sleep 3
-  done ) &
-SAMPLER_PID=$!
+SAMPLER_PID=""
 
 echo "### 4+5) DETERMINISTIC commissioning: device commissions -> self-partitions to LEADER -> THEN otbr joins"
 cd "$R"
@@ -89,7 +81,8 @@ ML="fd61:f77b:d3df:233e:0:ff:fe00"   # mesh-local prefix (RLOC-based addrs = <ML
 for attempt in $(seq 1 8); do
   echo "  --- attempt $attempt: fresh Renode boot ---"
   pkill -9 -f "[R]enode.dll" 2>/dev/null; sleep 2
-  "$OT_CTL" thread stop >/dev/null 2>&1   # reset otbr to detached for a clean deterministic re-join
+  # NORMAL: do NOT thread-stop otbr per attempt (flip-era artifact) -- otbr must STAY the Leader+BR across
+  # device reboots so each fresh device can attach to its persistent partition.
   rm -f "$HOME"/.matter* /tmp/chip_* 2>/dev/null
   : > "$RLOG"
   SCENARIO="${SCENARIO:-matter/renode-thread/scenarios/e2e-15.4.resc}"   # M0: override with the radio-Info diag scenario
@@ -126,36 +119,26 @@ for attempt in $(seq 1 8); do
     echo "      attempt $attempt: pre-TNE BLE failure: $(grep -aoE 'connect\(\) failed[^\"]*|receive window closed|CHIP Error 0x[0-9A-F]+' "$PLOG" 2>/dev/null | tail -1); retry"
     kill -9 "$CHIP_PID" 2>/dev/null; wait "$CHIP_PID" 2>/dev/null; continue
   fi
-  echo "      TNE reached; +16s for device to self-partition to LEADER, then otbr thread start (deterministic join)"
-  sleep 16
-  # DETERMINISTIC CONVERGENCE via BOUNCE-RETRY. otbr's auto border-routing OMR publication is flaky and,
-  # more fundamentally, its initial attach frequently MISSES the device's MLE advertisements over the
-  # emulated 15.4 bridge -> it forms its own singleton leader partition, from which the automatic
-  # BetterPartition merge is unreliable. So (re)attach otbr (thread stop/start) until it MERGES into the
-  # device's partition (state child/router); each re-attach is a fresh Parent Request that usually
-  # catches the device. Then MANUALLY publish a fixed OMR prefix into netdata (only valid post-merge).
-  # PERF: poll fast (1s) with a short ~12s cap and fewer rounds (see e2e_flip_inner.sh).
-  merged=0
-  for round in $(seq 1 6); do
-    "$OT_CTL" thread stop >/dev/null 2>&1; sleep 1; "$OT_CTL" thread start >/dev/null 2>&1
-    for i in $(seq 1 12); do   # ~12s per round, poll every 1s
-      st=$("$OT_CTL" state 2>/dev/null | head -1 | tr -d '[:space:]')
-      case "$st" in child|router) merged=1; break;; esac
-      sleep 1
-    done
-    [ "$merged" = 1 ] && break
-    echo "      merge round $round: state=$st (own leader/detached), re-attaching otbr ..."
+  echo "      TNE reached; device now ATTACHES to otbr's existing partition (normal topology: otbr=Leader+BR)"
+  # NORMAL TOPOLOGY: the device commissioned with the same dataset as otbr, so on ThreadNetworkEnable it should
+  # attach to otbr's already-formed partition as a child/router (no flip, no bounce-retry, no manual merge).
+  # otbr stays the stable Leader+BR (it already published the OMR + enabled SRP up front). We just observe that
+  # otbr's partition gains the device (router table) and then wait for the device to SLAAC the OMR + register
+  # its _matter SRP service. Log otbr's view of the device attaching for diagnostics.
+  otbr_pid=$("$OT_CTL" partitionid 2>/dev/null | head -1 | tr -d '[:space:]')
+  attached=0
+  for i in $(seq 1 30); do   # up to ~30s for the device to attach to otbr
+    rt=$("$OT_CTL" router table 2>/dev/null | grep -cE "0x[0-9a-fA-F]{4}")
+    nb=$("$OT_CTL" neighbor table 2>/dev/null | grep -cE "0x[0-9a-fA-F]{4}")
+    if [ "${rt:-0}" -gt 1 ] || [ "${nb:-0}" -gt 0 ]; then attached=1; echo "      device attached to otbr (routers=$rt neighbors=$nb) @ $(printf '%(%H:%M:%S)T' -1)"; break; fi
+    sleep 1
   done
-  pid=$("$OT_CTL" partitionid 2>/dev/null | head -1 | tr -d '[:space:]')
-  echo "      otbr merge result: state=$("$OT_CTL" state 2>/dev/null|head -1|tr -d '[:space:]') partition=$pid merged=$merged"
-  if [ "$merged" != 1 ]; then
-    echo "      otbr never merged into the device's partition after 6 rounds; abandoning for fresh boot"
+  merged="$attached"
+  echo "      attach result: otbr_state=$("$OT_CTL" state 2>/dev/null|head -1|tr -d '[:space:]') partition=$otbr_pid attached=$attached"
+  if [ "$attached" != 1 ]; then
+    echo "      device did NOT attach to otbr within ~30s (self-partitioned again?); abandoning for fresh boot"
     kill -9 "$CHIP_PID" 2>/dev/null; wait "$CHIP_PID" 2>/dev/null; continue
   fi
-  echo "      MERGED. Publishing fixed OMR fd0d:b0b0:cafe:1::/64 + SRP server into the device's partition netdata"
-  "$OT_CTL" srp server enable >/dev/null 2>&1   # ensure SRP server + its netdata DNS/SRP entry are advertised
-  "$OT_CTL" prefix add fd0d:b0b0:cafe:1::/64 paos med >/dev/null 2>&1
-  "$OT_CTL" netdata register >/dev/null 2>&1
   echo "      waiting for device to SLAAC the OMR + register _matter SRP -> operational CASE -> CommissioningComplete"
   conv_logged=0; waited=0
   while kill -0 "$CHIP_PID" 2>/dev/null; do
@@ -195,6 +178,30 @@ for attempt in $(seq 1 8); do
         fi
       elif [ "$waited" -ge 30 ]; then
         echo "      NOT converged within ~90s (no device SRP registration); abandoning attempt for a fresh boot"
+        if [ "${NOSRP_DIAG_DONE:-0}" = 0 ]; then
+          NOSRP_DIAG_DONE=1
+          NF=/tmp/diag-nosrp.txt
+          {
+            echo "############ NO-SRP DIAGNOSTIC (attempt $attempt) @ $(printf '%(%H:%M:%S)T' -1) ############"
+            echo "== srp server state (is otbr's SRP server actually running?) =="
+            "$OT_CTL" srp server state
+            "$OT_CTL" srp server host
+            "$OT_CTL" srp server service
+            echo "== netdata show (does it advertise SRP server + OMR prefix for the device to auto-start SRP?) =="
+            "$OT_CTL" netdata show
+            echo "== netdata service TLVs (SRP server entry?) =="
+            "$OT_CTL" service
+            echo "== router table / child table / neighbor table (is the device present + its role) =="
+            "$OT_CTL" router table
+            "$OT_CTL" child table
+            "$OT_CTL" neighbor table
+            echo "== ipaddr / OMR prefixes otbr knows =="
+            "$OT_CTL" ipaddr
+            "$OT_CTL" br omrprefix
+            "$OT_CTL" br onlinkprefix
+          } > "$NF" 2>&1
+          echo "      [no-SRP diag captured to $NF]"
+        fi
         kill -9 "$CHIP_PID" 2>/dev/null
         break
       fi

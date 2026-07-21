@@ -1,0 +1,27 @@
+# RX-level trace of the 126B Child ID Response: is it dropped at the radio (collision/abort) or above?
+# Radio at Info level so ReceiveFrame()/RX-drop lines appear; MLE hooks show what the stack accepts.
+#   08056afc HandleParentResponse   -- device receives the SMALL (~69B) Parent Response (control: small RX works)
+#   080572bc HandleChildIdResponse  -- device receives the LARGE (126B) Child ID Response (the failing frame)
+#   08057a74 SendChildIdRequest     -- device attach attempts
+mach create "stock"
+machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
+machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
+sysbus LoadELF @matter/brd2601b-matter-silabs-lighting-example.out
+cpu PerformanceInMips 39
+seqcpu PerformanceInMips 39
+emulation CreateBLEMedium "wireless"
+connector Connect sysbus.radio wireless
+connector Connect sysbus.bleCentral wireless
+connector Connect sysbus.ieee802154 wireless
+emulation SetGlobalSerialExecution true
+emulation SetGlobalAdvanceImmediately false
+logFile @/tmp/renode-15.4.log true
+logLevel 2
+# Promote radio RX/TX/drop activity to Error so it shows at logLevel 2 without the Info register-write flood.
+# This surfaces the exact reason a frame is dropped: "not in RXSEARCH" / "PRE/SYNC COLLISION" /
+# "SYNC MISMATCH" / "RX already ongoing" / "TX was aborted" / "RX collision" / "Received".
+sysbus.radio LogBasicRadioActivityAsError true
+cpu AddHook 0x08056afc "open('/tmp/mle-P-RecvParentResp','a').write('.')"
+cpu AddHook 0x080572bc "open('/tmp/mle-b-RecvChildIdResp','a').write('.')"
+cpu AddHook 0x08057a74 "open('/tmp/mle-a-SendChildIdReq','a').write('.')"
+start
