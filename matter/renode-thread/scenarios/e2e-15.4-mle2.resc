@@ -1,0 +1,28 @@
+# Bisect: do otbr's MLE responses REACH the device's MLE layer (radio/6LoWPAN/UDP ok) but get rejected,
+# or do they never arrive? Hooks (arm-none-eabi-nm on stock ELF), each to its OWN file:
+#   080584c8 Mle::HandleUdpReceive     -- ANY MLE message arrives at the device's MLE layer (post UDP demux)
+#   08055a94 Mle::ProcessMessageSecurity-- MLE decrypt/auth runs (frame-counter/key check)
+#   08056afc Mle::HandleParentResponse -- device accepts a Parent Response
+#   080572bc Mle::HandleChildIdResponse-- device accepts the Child ID Response (the missing step)
+#   08057a74 Mle::SendChildIdRequest   -- device attach attempts
+mach create "stock"
+machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
+machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
+sysbus LoadELF @matter/brd2601b-matter-silabs-lighting-example.out
+cpu PerformanceInMips 39
+seqcpu PerformanceInMips 39
+emulation CreateBLEMedium "wireless"
+connector Connect sysbus.radio wireless
+connector Connect sysbus.bleCentral wireless
+connector Connect sysbus.ieee802154 wireless
+emulation SetGlobalSerialExecution true
+emulation SetGlobalAdvanceImmediately false
+logFile @/tmp/renode-15.4.log true
+logLevel 2
+logLevel 1 sysbus.radio
+cpu AddHook 0x080584c8 "open('/tmp/mle-U-HandleUdpRecv','a').write('.')"
+cpu AddHook 0x08055a94 "open('/tmp/mle-S-ProcMsgSecurity','a').write('.')"
+cpu AddHook 0x08056afc "open('/tmp/mle-P-RecvParentResp','a').write('.')"
+cpu AddHook 0x080572bc "open('/tmp/mle-b-RecvChildIdResp','a').write('.')"
+cpu AddHook 0x08057a74 "open('/tmp/mle-a-SendChildIdReq','a').write('.')"
+start

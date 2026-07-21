@@ -1,0 +1,30 @@
+# Bisect the below-MLE loss of the Child ID Response: is it 6LoWPAN-fragmented and failing reassembly?
+#   08054314 MeshForwarder::HandleReceivedFrame -- every inbound 6LoWPAN frame from MAC
+#   08054118 MeshForwarder::HandleFragment      -- a FRAGMENTED 6LoWPAN datagram fragment arrived
+#   080542a0 MeshForwarder::HandleLowpanHC      -- a NON-fragmented compressed 6LoWPAN frame arrived
+#   08053fd8 MeshForwarder::HandleDatagram      -- a full datagram is reassembled + handed to IP
+#   08053f2a MeshForwarder::ClearReassemblyList -- reassembly buffer cleared (timeout/complete)
+#   080584c8 Mle::HandleUdpReceive              -- MLE layer receives a message
+#   080572bc Mle::HandleChildIdResponse         -- device accepts the Child ID Response
+mach create "stock"
+machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
+machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
+sysbus LoadELF @matter/brd2601b-matter-silabs-lighting-example.out
+cpu PerformanceInMips 39
+seqcpu PerformanceInMips 39
+emulation CreateBLEMedium "wireless"
+connector Connect sysbus.radio wireless
+connector Connect sysbus.bleCentral wireless
+connector Connect sysbus.ieee802154 wireless
+emulation SetGlobalSerialExecution true
+emulation SetGlobalAdvanceImmediately false
+logFile @/tmp/renode-15.4.log true
+logLevel 2
+cpu AddHook 0x08054314 "open('/tmp/mf-R-HandleReceivedFrame','a').write('.')"
+cpu AddHook 0x08054118 "open('/tmp/mf-F-HandleFragment','a').write('.')"
+cpu AddHook 0x080542a0 "open('/tmp/mf-H-HandleLowpanHC','a').write('.')"
+cpu AddHook 0x08053fd8 "open('/tmp/mf-D-HandleDatagram','a').write('.')"
+cpu AddHook 0x08053f2a "open('/tmp/mf-C-ClearReassembly','a').write('.')"
+cpu AddHook 0x080584c8 "open('/tmp/mle-U-HandleUdpRecv','a').write('.')"
+cpu AddHook 0x080572bc "open('/tmp/mle-b-RecvChildIdResp','a').write('.')"
+start

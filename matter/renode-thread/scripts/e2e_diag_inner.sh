@@ -25,8 +25,8 @@ PLOG=/tmp/pairing-flip.log; RLOG=/tmp/renode-15.4.log; ALOG=/tmp/otbr-diag-agent
 SP="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # dir of this script (holds air_diag_sniff.py + mdns_query.py)
 DIAG_DONE=0
 
-AGENT_PID=""; RENODE_PID=""; SAMPLER_PID=""; AIRPID=""
-cleanup(){ kill -9 $AGENT_PID $RENODE_PID $SAMPLER_PID $AIRPID 2>/dev/null; }
+AGENT_PID=""; RENODE_PID=""; SAMPLER_PID=""; AIRPID=""; RTT_PID=""
+cleanup(){ kill -9 $AGENT_PID $RENODE_PID $SAMPLER_PID $AIRPID $RTT_PID 2>/dev/null; }
 trap cleanup EXIT
 
 echo "### 0) clean"
@@ -92,13 +92,22 @@ for attempt in $(seq 1 8); do
   "$OT_CTL" thread stop >/dev/null 2>&1   # reset otbr to detached for a clean deterministic re-join
   rm -f "$HOME"/.matter* /tmp/chip_* 2>/dev/null
   : > "$RLOG"
-  setsid bash -c "timeout 900 ./renode --disable-xwt --hide-log --port 3456 matter/renode-thread/scenarios/e2e-15.4.resc >/tmp/renode-stdout.log 2>&1" &
+  SCENARIO="${SCENARIO:-matter/renode-thread/scenarios/e2e-15.4.resc}"   # M0: override with the radio-Info diag scenario
+  setsid bash -c "timeout 900 ./renode --disable-xwt --hide-log --port 3456 $SCENARIO >/tmp/renode-stdout.log 2>&1" &
   RENODE_PID=$!
   gatt=0
   for i in $(seq 1 90); do grep -q "CHIPoBLE GATT ready" "$RLOG" 2>/dev/null && { gatt=1; break; }; sleep 1; done
   echo "      GATT ready=$gatt"
   [ "$gatt" = 1 ] || { echo "      no GATT this boot; retry"; continue; }
   sleep 3
+  # optional: drain the device SEGGER-RTT console (Matter/OpenThread logs) to /tmp/rtt.log via the monitor,
+  # to see the device's own view of operational CASE (does it receive Sigma1 / try to send Sigma2?).
+  if [ "${RTT_DRAIN:-0}" = 1 ]; then
+    kill -9 $RTT_PID 2>/dev/null
+    python3 "$SP/rtt_drain_monitor.py" 300 3456 >/tmp/rtt-drain.out 2>&1 &
+    RTT_PID=$!
+    echo "      [RTT drain started -> /tmp/rtt.log]"
+  fi
   # background chip-tool (full commissioning incl operational CASE over UDP-over-Thread)
   # --timeout 700: chip-tool's per-command wait defaults to 120s (PairingCommand::GetWaitDuration),
   # which aborts operational discovery/CASE long before otbr converges. Extend it so a single good
@@ -194,6 +203,7 @@ for attempt in $(seq 1 8); do
   done
   wait "$CHIP_PID" 2>/dev/null; PAIR_RC=$?
   grep -q "Device commissioning completed with success" "$PLOG" 2>/dev/null && commissioned=1
+  cp "$RLOG" "/tmp/radio-attempt-$attempt.log" 2>/dev/null   # M0: preserve this attempt's full radio-Info log before the next boot truncates $RLOG
   if [ "$commissioned" = 1 ]; then echo "      *** FULL COMMISSIONING SUCCESS -> CommissioningComplete (attempt $attempt) ***"; break; fi
   echo "      attempt $attempt: no success (converged=$conv_logged rc=$PAIR_RC); retry"
   kill -9 "$CHIP_PID" 2>/dev/null; wait "$CHIP_PID" 2>/dev/null

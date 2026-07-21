@@ -1,0 +1,34 @@
+# M0 RADIO-INFO DIAGNOSTIC scenario: identical to e2e-15.4.resc but with the DEVICE radio
+# (sysbus.radio = SiLabs_xG24_LPW) and the 802.15.4 host bridge (sysbus.ieee802154) at Info
+# level, so the frame-level RX/TX/DROP logs become visible. At the default logLevel 2 (Warning)
+# these are suppressed (they log at Info, gated by LogBasicRadioActivityAsError=false).
+#
+# What this exposes (grep markers in /tmp/renode-15.4.log):
+#   "Received at ..."                 -> device RX-accepted a frame (+ full MPDU bytes)  [line ~4806]
+#   "Sending frame at ..."            -> device TX a frame                               [line ~3280]
+#   "Dropping (TX was aborted)"       -> RX dropped: no matching TX-start in air queue   [line ~1020]
+#   "Dropping: (RX already ongoing)"  -> RX dropped: receiver busy (half-duplex)         [line ~1038]
+#   "Dropping (not in RXSEARCH)"      -> RX dropped: radio not searching                 [line ~4714]
+#   "Dropping (PRE/SYNC COLLISION)"   -> RX dropped: preamble/sync collision             [line ~4721]
+#   "Dropping (SYNC MISMATCH)"        -> RX dropped: sync word mismatch                  [line ~4728]
+#   "Dropping at ...: RX collision"   -> RX dropped: mid-frame collision                 [line ~4793]
+#   "Failed to assemble a frame"      -> reassembly failure (already Error, visible)     [line ~4219]
+# Correlate against /tmp/air-diag-sniff.log (what hit the OT-sim air, both directions) and
+# /tmp/otbr-diag-agent.log (-d7, what otbr sent/received) to build the Received-vs-Dropped ledger.
+mach create "stock"
+machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
+machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
+sysbus LoadELF @matter/brd2601b-matter-silabs-lighting-example.out
+cpu PerformanceInMips 39
+seqcpu PerformanceInMips 39
+emulation CreateBLEMedium "wireless"
+connector Connect sysbus.radio wireless
+connector Connect sysbus.bleCentral wireless
+connector Connect sysbus.ieee802154 wireless
+emulation SetGlobalSerialExecution true
+emulation SetGlobalAdvanceImmediately false
+logFile @/tmp/renode-15.4.log true
+logLevel 2
+logLevel 1 sysbus.radio
+logLevel 1 sysbus.ieee802154
+start

@@ -1,0 +1,38 @@
+# SRP-client trace: pinpoint WHY the attached device never registers _matter via SRP.
+# Low-perturbation per-function-entry hooks on the OpenThread SRP client ladder (arm-none-eabi-nm on stock ELF):
+#   0804e1c0  ot::Srp::Client::ProcessAutoStart()   -- sees netdata, tries to auto-start
+#   0804dfdc  ot::Srp::Client::SelectUnicastEntry() -- picks the SRP server from netdata
+#   0804e158  ot::Srp::Client::Start()              -- client targets a server addr
+#   0804dea8  ot::Srp::Client::SendUpdate()         -- device TRANSMITS the SRP registration (outbound)
+#   0804e3d0  ot::Srp::Client::ProcessResponse()    -- device got the server's reply (round-trip ok)
+#   0804d4ea  ot::Srp::Client::HandleUpdateDone()   -- registration succeeded
+#   0804d5d4  ot::Srp::Client::UpdateState()        -- state-machine tick
+# Where the ladder stops => the exact failure stage (netdata/selection vs send vs link round-trip vs reject).
+mach create "stock"
+machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
+machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
+sysbus LoadELF @matter/brd2601b-matter-silabs-lighting-example.out
+cpu PerformanceInMips 39
+seqcpu PerformanceInMips 39
+emulation CreateBLEMedium "wireless"
+connector Connect sysbus.radio wireless
+connector Connect sysbus.bleCentral wireless
+connector Connect sysbus.ieee802154 wireless
+emulation SetGlobalSerialExecution true
+emulation SetGlobalAdvanceImmediately false
+logFile @/tmp/renode-15.4.log true
+logLevel 2
+# Each hook writes to its OWN file (concurrent appends to a shared file tear/race).
+cpu AddHook 0x0804e1c0 "open('/tmp/srp-A-ProcessAutoStart','a').write('.')"
+cpu AddHook 0x0804dfdc "open('/tmp/srp-B-SelectUnicastEntry','a').write('.')"
+cpu AddHook 0x0804e158 "open('/tmp/srp-C-Start','a').write('.')"
+cpu AddHook 0x0804dea8 "open('/tmp/srp-D-SendUpdate','a').write('.')"
+cpu AddHook 0x0804e3d0 "open('/tmp/srp-E-ProcessResponse','a').write('.')"
+cpu AddHook 0x0804d4ea "open('/tmp/srp-F-HandleUpdateDone','a').write('.')"
+# Branch-level gates inside ProcessAutoStart (from objdump):
+cpu AddHook 0x0804e214 "open('/tmp/srp-G-ServiceData-NOTFOUND','a').write('.')"
+cpu AddHook 0x0804e286 "open('/tmp/srp-I-ServerData-try','a').write('.')"
+cpu AddHook 0x0804e266 "open('/tmp/srp-J-reached-IsUnspec-gate','a').write('.')"
+cpu AddHook 0x0804e2a0 "open('/tmp/srp-K-addr-UNSPEC-NOSTART','a').write('.')"
+cpu AddHook 0x0804e272 "open('/tmp/srp-L-about-to-START','a').write('.')"
+start

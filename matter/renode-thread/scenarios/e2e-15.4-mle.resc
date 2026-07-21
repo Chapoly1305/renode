@@ -1,0 +1,37 @@
+# Device-side MLE trace: why does the child re-attach every ~12s (never syncing network data)?
+# Per-function-entry hooks (arm-none-eabi-nm on stock ELF), each to its OWN file (shared-file appends tear):
+#   08057a74 SendChildIdRequest       -- device initiates attach
+#   080572bc HandleChildIdResponse    -- device RECEIVES parent's Child ID Response (attach accepted?)
+#   08055d54 SetStateChild            -- device transitions to attached child
+#   08056630 SendDataRequest          -- device requests full network data
+#   08056ab4 HandleDataResponse       -- device RECEIVES network data (the SRP-service-bearing netdata!)
+#   08057bd0 SendChildUpdateRequest   -- device keep-alive to parent
+#   08057054 HandleChildUpdateResponse-- device receives keep-alive response
+#   08056f28 BecomeDetached           -- device drops sync (churn)
+#   080571cc Reattach                 -- device restarts attach
+#   08057e1c HandleAttachTimer        -- attach-state-machine timer (the ~12s cadence?)
+mach create "stock"
+machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
+machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
+sysbus LoadELF @matter/brd2601b-matter-silabs-lighting-example.out
+cpu PerformanceInMips 39
+seqcpu PerformanceInMips 39
+emulation CreateBLEMedium "wireless"
+connector Connect sysbus.radio wireless
+connector Connect sysbus.bleCentral wireless
+connector Connect sysbus.ieee802154 wireless
+emulation SetGlobalSerialExecution true
+emulation SetGlobalAdvanceImmediately false
+logFile @/tmp/renode-15.4.log true
+logLevel 2
+cpu AddHook 0x08057a74 "open('/tmp/mle-a-SendChildIdReq','a').write('.')"
+cpu AddHook 0x080572bc "open('/tmp/mle-b-RecvChildIdResp','a').write('.')"
+cpu AddHook 0x08055d54 "open('/tmp/mle-c-SetStateChild','a').write('.')"
+cpu AddHook 0x08056630 "open('/tmp/mle-d-SendDataReq','a').write('.')"
+cpu AddHook 0x08056ab4 "open('/tmp/mle-e-RecvDataResp','a').write('.')"
+cpu AddHook 0x08057bd0 "open('/tmp/mle-f-SendChildUpdReq','a').write('.')"
+cpu AddHook 0x08057054 "open('/tmp/mle-g-RecvChildUpdResp','a').write('.')"
+cpu AddHook 0x08056f28 "open('/tmp/mle-h-BecomeDetached','a').write('.')"
+cpu AddHook 0x080571cc "open('/tmp/mle-i-Reattach','a').write('.')"
+cpu AddHook 0x08057e1c "open('/tmp/mle-j-AttachTimer','a').write('.')"
+start

@@ -1,0 +1,29 @@
+# Non-perturbing device-stack trace for operational CASE: cpu hooks on the inbound Matter path.
+# Each hook fires ONLY when that function is entered (per-message, not per-instruction) and appends a tag to
+# /tmp/hooks.log, so we can see how far chip-tool's Sigma1 gets inside the device WITHOUT the RTT-drain
+# perturbation. Addresses from arm-none-eabi-nm on the stock ELF:
+#   0x0806dde8  chip::CASESession::HandleSigma1            (did CASE receive Sigma1?)
+#   0x0809580c  chip::Inet::UDPEndPointImplOT::handleUdpReceive (did the OT->Matter UDP socket get a datagram?)
+#   0x08083f08  chip::SessionManager::OnMessageReceived    (did the Matter session layer get a message?)
+#   0x0804b5d4  ot::Ip6::Ip6::HandleDatagram               (did the IPv6 datagram reach OT IP = MAC-decrypt+6LoWPAN ok?)
+mach create "stock"
+machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
+machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
+sysbus LoadELF @matter/brd2601b-matter-silabs-lighting-example.out
+cpu PerformanceInMips 39
+seqcpu PerformanceInMips 39
+emulation CreateBLEMedium "wireless"
+connector Connect sysbus.radio wireless
+connector Connect sysbus.bleCentral wireless
+connector Connect sysbus.ieee802154 wireless
+emulation SetGlobalSerialExecution true
+emulation SetGlobalAdvanceImmediately false
+logFile @/tmp/renode-15.4.log true
+logLevel 2
+cpu AddHook 0x08053fd8 "open('/tmp/hooks.log','a').write('1_OT_MeshForwarder_HandleDatagram\n')"
+cpu AddHook 0x0804b5d4 "open('/tmp/hooks.log','a').write('2_OT_Ip6_HandleDatagram\n')"
+cpu AddHook 0x0804e8f0 "open('/tmp/hooks.log','a').write('3_OT_Udp_HandleMessage\n')"
+cpu AddHook 0x0809580c "open('/tmp/hooks.log','a').write('4_Matter_UDP_handleUdpReceive\n')"
+cpu AddHook 0x08083f08 "open('/tmp/hooks.log','a').write('5_Matter_SessionMgr_OnMessageReceived\n')"
+cpu AddHook 0x0806dde8 "open('/tmp/hooks.log','a').write('6_CASE_HandleSigma1\n')"
+start

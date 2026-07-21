@@ -1,0 +1,24 @@
+# Pinpoint WHY the Child ID Response (MLE cmd 12) is rejected. From objdump of Mle::HandleUdpReceive:
+#   0x0805859e  right after ProcessMessageSecurity: r0 = security result (0=ok, !=0=fail -> frame dropped pre-dispatch)
+#   0x080585ca  post-security: r3 = MLE command byte (10=ParentResp, 12=ChildIdResp, 4=Adv, 8=DataResp, 15=Announce)
+# If cmd 12 NEVER appears at 0x80585ca -> Child ID Response fails MLE/MAC security (never decrypts); correlate with
+# r0!=0 count at 0x805859e. If cmd 12 DOES appear -> it passes security but is rejected later (state/neighbor).
+mach create "stock"
+machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
+machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
+sysbus LoadELF @matter/brd2601b-matter-silabs-lighting-example.out
+cpu PerformanceInMips 39
+seqcpu PerformanceInMips 39
+emulation CreateBLEMedium "wireless"
+connector Connect sysbus.radio wireless
+connector Connect sysbus.bleCentral wireless
+connector Connect sysbus.ieee802154 wireless
+emulation SetGlobalSerialExecution true
+emulation SetGlobalAdvanceImmediately false
+logFile @/tmp/renode-15.4.log true
+logLevel 2
+cpu AddHook 0x0805859e "open('/tmp/mle-sec','a').write(str(cpu.GetRegisterUnsafe(0).RawValue)+'\n')"
+cpu AddHook 0x080585ca "open('/tmp/mle-cmd','a').write(str(cpu.GetRegisterUnsafe(3).RawValue)+'\n')"
+cpu AddHook 0x08056afc "open('/tmp/mle-P-ParentResp','a').write('.')"
+cpu AddHook 0x080572bc "open('/tmp/mle-b-ChildIdResp','a').write('.')"
+start

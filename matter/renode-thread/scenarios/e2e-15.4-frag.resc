@@ -1,0 +1,31 @@
+# CONFIRM: is the Child ID Response lost as a failed host->device 6LoWPAN multi-fragment reassembly?
+# Single-frame msgs (Parent Response 69B) -> HandleLowpanHC. Fragmented msgs (Child ID Response 126B+106B) ->
+# HandleFragment (per fragment) then HandleDatagram when reassembled. If F fires but the datagram never completes
+# (cmd 12 never reaches MLE dispatch), reassembly of the Child ID Response is failing.
+#   08053fd8 MeshForwarder::HandleDatagram   (reassembled datagram -> IP)  [proven-firing in flip trace]
+#   0804b5d4 Ip6::Ip6::HandleDatagram        (datagram at IPv6)            [proven-firing in flip trace]
+#   08054118 MeshForwarder::HandleFragment   (a 6LoWPAN FRAGMENT arrived)
+#   080542a0 MeshForwarder::HandleLowpanHC   (a NON-fragmented compressed frame)
+#   080585ca Mle::HandleUdpReceive dispatch  (r3 = MLE command byte, post-security)
+#   080572bc Mle::HandleChildIdResponse      (accepted Child ID Response)
+mach create "stock"
+machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
+machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
+sysbus LoadELF @matter/brd2601b-matter-silabs-lighting-example.out
+cpu PerformanceInMips 39
+seqcpu PerformanceInMips 39
+emulation CreateBLEMedium "wireless"
+connector Connect sysbus.radio wireless
+connector Connect sysbus.bleCentral wireless
+connector Connect sysbus.ieee802154 wireless
+emulation SetGlobalSerialExecution true
+emulation SetGlobalAdvanceImmediately false
+logFile @/tmp/renode-15.4.log true
+logLevel 2
+cpu AddHook 0x08054118 "open('/tmp/frag-F-HandleFragment','a').write('.')"
+cpu AddHook 0x080542a0 "open('/tmp/frag-H-HandleLowpanHC','a').write('.')"
+cpu AddHook 0x08053fd8 "open('/tmp/frag-D-HandleDatagram','a').write('.')"
+cpu AddHook 0x0804b5d4 "open('/tmp/frag-I-Ip6Datagram','a').write('.')"
+cpu AddHook 0x080585ca "open('/tmp/mle-cmd','a').write(str(cpu.GetRegister(3).RawValue)+'\n')"
+cpu AddHook 0x080572bc "open('/tmp/mle-b-ChildIdResp','a').write('.')"
+start
