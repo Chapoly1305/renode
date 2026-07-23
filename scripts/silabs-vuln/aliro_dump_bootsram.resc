@@ -19,4 +19,4 @@ emulation RunFor "4.0"
 pause
 echo "=== tail-base ==="
 sysbus ReadDoubleWord 0x20012894
-python "import System; SB=self.Machine.SystemBus; data=SB.ReadBytes(0x20000000, 0x40000); System.IO.File.WriteAllBytes(\"/home/chen/matter-renode-work/sl-renode/scripts/silabs-vuln/aliro_boot_sram.bin\", data); System.Console.WriteLine(\"DUMPED {0} bytes\".format(len(data)))"
+python "import System; SB=self.Machine.SystemBus; data=SB.ReadBytes(0x20000000, 0x40000); System.IO.File.WriteAllBytes(\"scripts/silabs-vuln/aliro_boot_sram.bin\", data); System.Console.WriteLine(\"DUMPED {0} bytes\".format(len(data)))"

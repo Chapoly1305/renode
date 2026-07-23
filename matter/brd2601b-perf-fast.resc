@@ -1,0 +1,29 @@
+# BRD2601B performance-oriented BLE run
+# Tuned for speed while keeping stable BLE advertising behavior.
+
+set bin @/Volumes/Tools/sl-renode/matter/brd2601b-matter-silabs-lighting-example.out
+set run_seconds @10
+
+emulation CreateBLEMedium "wireless"
+
+# Keep serial scheduling to avoid the known non-deterministic BLE stall.
+emulation SetGlobalSerialExecution true
+
+# Run as fast as host allows (do not throttle to real-time).
+emulation SetGlobalAdvanceImmediately true
+emulation SetGlobalQuantum "0.000050"
+
+mach create "matter"
+machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
+sysbus LoadELF $bin
+connector Connect sysbus.radio wireless
+
+# Minimal logging for performance.
+logLevel 1
+
+# Optional BLE frame logging (slower):
+# logLevel 3
+# radio LogBasicRadioActivityAsError true
+
+emulation RunFor $run_seconds
+quit

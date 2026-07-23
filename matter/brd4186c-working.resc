@@ -1,0 +1,39 @@
+set bin @path_to_home/matter_sdk/out/lighting-app/thread/BRD4186C/matter-silabs-lighting-example.out
+
+using sysbus
+emulation SetGlobalSerialExecution true
+emulation CreateIEEE802_15_4Medium "wireless"
+emulation SetGlobalQuantum "0.000020"
+
+# Start wireshark with 802.15.4 decoder
+#emulation LogIEEE802_15_4Traffic
+# Start wireshark with BLE decoder
+#emulation LogBLETraffic
+
+################################################
+# Create node1
+################################################
+mach create "node1"
+machine LoadPlatformDescription "platforms/boards/silabs/brd4186c.repl"
+macro reset
+"""
+    sysbus LoadSymbolsFrom $bin
+#    cpu VectorTableOffset `sysbus GetSymbolAddress "__Vectors"`
+"""
+sysbus LoadELF $bin
+runMacro $reset
+sysbus LogAllPeripheralsAccess true
+emulation CreateServerSocketTerminal 3451 "cli_node1" false
+connector Connect sysbus.eusart0 cli_node1
+connector Connect sysbus.radio wireless
+# Optional: Create a debug adapter for packet trace
+# emulation CreateServerSocketTerminal 3551 "dch_term_node1" false
+# emulation CreatePacketTraceDebugAdapter sysbus.radio dch_term_node1 "dch_node1"
+logLevel 3
+radio LogBasicRadioActivityAsError true
+### Debug
+# Uncomment to enable debugging of main CPU
+#machine StartGdbServer 3333 false cpu
+# Uncomment to enable debugging of Sequencer CPU
+#machine StartGdbServer 3333 false seqcpu
+#showAnalyzer eusart0

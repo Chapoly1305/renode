@@ -1,0 +1,45 @@
+# Script to reproduce BLE advertising issue for bug report
+#
+# Issue: BLE advertising stops after ~50-200ms instead of continuing
+# Expected: Continuous BLE advertising every ~100ms for commissioning
+# Actual: Advertising stops completely after a few frames
+#
+# Firmware: Matter lighting example for BRD4186C (EFR32MG24)
+
+emulation CreateBLEMedium "wireless"
+emulation SetGlobalSerialExecution true
+mach create "matter"
+machine LoadPlatformDescription @platforms/boards/silabs/brd4186c.repl
+sysbus LoadELF @/Volumes/Workspace/sl-matter/out/lighting-app/BRD4186C/matter-silabs-lighting-example.out
+cpu VectorTableOffset `sysbus GetSymbolAddress "__Vectors"`
+connector Connect sysbus.radio wireless
+
+# Enable radio logging to show when frames are sent
+logLevel -1 sysbus.radio
+
+echo "========================================================================"
+echo "Reproducing BLE Advertising Issue"
+echo "========================================================================"
+echo "Board: BRD4186C (EFR32MG24 Mighty Gecko)"
+echo "Firmware: Matter SiLabs Lighting Example"
+echo "Expected: BLE advertising should continue for 15+ minutes"
+echo "Actual: BLE advertising stops after ~50-200ms"
+echo ""
+echo "Running for 10 seconds. Watch for 'Sending frame' messages..."
+echo "They should appear every ~100ms but will stop early."
+echo "========================================================================"
+echo ""
+
+# Run for 10 seconds
+emulation RunFor @10
+
+echo ""
+echo "========================================================================"
+echo "Test Complete"
+echo "========================================================================"
+echo "If the issue is present, you should see:"
+echo "- Only a few 'Sending frame' messages in the first 200ms"
+echo "- No frames for the remaining 9.8 seconds"
+echo ""
+echo "Expected behavior: ~100 frames over 10 seconds"
+echo "========================================================================"

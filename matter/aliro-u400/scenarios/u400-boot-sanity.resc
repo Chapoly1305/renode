@@ -2,7 +2,7 @@
 :description: Boots the Aqara U400 Aliro firmware on emulated EFR32MG24 (brd4186c) and confirms the vulnerable handler bytes at 0x805e7b0 match the objdump ground truth.
 # Ground-truth reference run: /home/chen/sl-renode + /home/chen/aliro-reassembly-audit/renode/*.
 
-$bin=@/home/chen/matter-renode-work/sl-renode/matter/aliro-u400/firmware/U400_primary_target.elf
+$bin=@/home/chen/aliro-renode/matter/aliro-u400/firmware/U400_primary_target.elf
 $vtor=0x08006000
 include @scripts/silabs-vuln/boot_mg24.resc
 
