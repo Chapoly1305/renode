@@ -1,0 +1,20 @@
+# Same as e2e-15.4.resc but routes the device's UART console(s) to the Renode log so we can see
+# the stock firmware's Matter/OpenThread logging (why it does / doesn't advertise operational).
+mach create "stock"
+machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
+machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
+sysbus LoadELF @matter/brd2601b-matter-silabs-lighting-example.out
+cpu PerformanceInMips 39
+seqcpu PerformanceInMips 39
+emulation CreateBLEMedium "wireless"
+connector Connect sysbus.radio wireless
+connector Connect sysbus.bleCentral wireless
+connector Connect sysbus.ieee802154 wireless
+emulation SetGlobalSerialExecution true
+emulation SetGlobalAdvanceImmediately false
+logFile @/tmp/renode-15.4.log true
+logLevel 2
+showAnalyzer sysbus.usart0 LoggingUartAnalyzer
+showAnalyzer sysbus.eusart0 LoggingUartAnalyzer
+showAnalyzer sysbus.eusart1 LoggingUartAnalyzer
+start

@@ -14,7 +14,7 @@ using sysbus
 emulation SetGlobalSerialExecution true
 mach create "mg24"
 machine LoadPlatformDescription @platforms/boards/silabs/brd4186c.repl
-sysbus LoadELF @/home/chen/matter-renode-work/sl-renode/matter/aliro-u400/firmware/U400_primary_target.elf
+sysbus LoadELF @/home/chen/aliro-renode/matter/aliro-u400/firmware/U400_primary_target.elf
 sysbus.cpu VectorTableOffset 0x08006000
 
 # ---- stubs (labeled scaffolding) ----

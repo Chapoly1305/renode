@@ -23,7 +23,7 @@ sysbus.cpu VectorTableOffset 0x08006000
 # --- overlay the REAL post-boot SRAM (restores heap + allocator control block) ---
 # aliro_boot_sram.bin = full SRAM captured after a radio+HAL-bypassed 4s boot (regenerate via
 # aliro_dump_bootsram.resc). Deterministic (no ASLR) => addresses equal the real device.
-python "import System; SB=self.Machine.SystemBus; data=System.IO.File.ReadAllBytes(\"/home/chen/matter-renode-work/sl-renode/scripts/silabs-vuln/aliro_boot_sram.bin\"); SB.WriteBytes(data, 0x20000000, False, None); System.Console.WriteLine(\"OVERLAY restored {0} bytes; tail-base now 0x{1:X}\".format(len(data), SB.ReadDoubleWord(0x20012894)))"
+python "import System; SB=self.Machine.SystemBus; data=System.IO.File.ReadAllBytes(\"scripts/silabs-vuln/aliro_boot_sram.bin\"); SB.WriteBytes(data, 0x20000000, False, None); System.Console.WriteLine(\"OVERLAY restored {0} bytes; tail-base now 0x{1:X}\".format(len(data), SB.ReadDoubleWord(0x20012894)))"
 
 # --- stubs: loggers + FreeRTOS transfer-list lock gate (same as layout_map) ---
 sysbus WriteWord 0x8033598 0x4770

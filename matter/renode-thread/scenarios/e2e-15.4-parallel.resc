@@ -1,0 +1,22 @@
+# M4 experiment: same as e2e-15.4-radiodiag.resc but with SetGlobalSerialExecution FALSE (true parallel
+# cores). Hypothesis: parallel M33 + sequencer cores let the RAC Storage0 mailbox handshake complete
+# concurrently (as on real silicon), curing the two-core livelock that wedges the radio post-operational.
+# RISK: parallel cores were previously pinned OFF because they desynced the host-bridge (BLE/15.4) real-time
+# timing -> commissioning may break earlier. This run tests empirically whether that still holds.
+mach create "stock"
+machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
+machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
+sysbus LoadELF @matter/brd2601b-matter-silabs-lighting-example.out
+cpu PerformanceInMips 39
+seqcpu PerformanceInMips 39
+emulation CreateBLEMedium "wireless"
+connector Connect sysbus.radio wireless
+connector Connect sysbus.bleCentral wireless
+connector Connect sysbus.ieee802154 wireless
+emulation SetGlobalSerialExecution false
+emulation SetGlobalAdvanceImmediately false
+logFile @/tmp/renode-15.4.log true
+logLevel 2
+logLevel 1 sysbus.radio
+logLevel 1 sysbus.ieee802154
+start

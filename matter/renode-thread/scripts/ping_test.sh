@@ -3,7 +3,7 @@
 # Thread leader, then ping its mesh-local RLOC address from the leader and check for ICMPv6 replies.
 # Proves the IP-over-Thread datapath end to end. Blocks until done; prints a summary.
 set -u
-R=/home/chen/matter-renode-work/sl-renode
+R=/home/chen/aliro-renode
 CHIP=/home/chen/matter-renode-work/connectedhomeip/out/chip-tool-op/chip-tool
 OT_CLI_FTD=${OT_CLI_FTD:-/home/chen/matter-renode-work/connectedhomeip/third_party/openthread/repo/build/ot-cli/examples/apps/cli/ot-cli-ftd}
 OTLEADER="$R/matter/renode-thread/scripts/ot_leader.sh"

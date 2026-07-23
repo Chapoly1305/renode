@@ -6,7 +6,7 @@
 #
 # Usage: e2e_native.sh [pairing_timeout_s]   (default 90)
 set -u
-R=/home/chen/matter-renode-work/sl-renode
+R=/home/chen/aliro-renode
 CHIP=/home/chen/matter-renode-work/connectedhomeip/out/chip-tool-op/chip-tool
 OTLEADER="$R/matter/renode-thread/scripts/ot_leader.sh"
 DATASET="0e080000000000010000000300000f35060004001fffe0020811111111222222220708fd61f77bd3df233e051000112233445566778899aabbccddeeff030e4f70656e54687265616444656d6f010212340410445f2b5ca6f2a93a55ce570a70efeecb0c0402a0fff8"

@@ -1,7 +1,7 @@
 import struct
 from unicorn import *
 from unicorn.arm_const import *
-BIN="/home/chen/matter-renode-work/sl-renode/matter/aliro-u400/fuzzware/firmware/U400.bin"
+BIN="/home/chen/aliro-renode/matter/aliro-u400/fuzzware/firmware/U400.bin"
 code=open(BIN,"rb").read()
 uc=Uc(UC_ARCH_ARM, UC_MODE_THUMB | UC_MODE_MCLASS)
 # enable VFP/FPU so FP instructions don't raise UC_ERR_EXCEPTION

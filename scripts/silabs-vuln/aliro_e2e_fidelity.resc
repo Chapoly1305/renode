@@ -23,7 +23,7 @@ sysbus LoadELF @/home/chen/aliro-reassembly-audit/firmware/U400_primary_target.e
 sysbus.cpu VectorTableOffset 0x08006000
 
 # --- overlay the REAL post-boot SRAM (restores heap + allocator control block) ---
-python "import System; SB=self.Machine.SystemBus; data=System.IO.File.ReadAllBytes(\"/home/chen/matter-renode-work/sl-renode/scripts/silabs-vuln/aliro_boot_sram.bin\"); SB.WriteBytes(data, 0x20000000, False, None); System.Console.WriteLine(\"OVERLAY restored {0} bytes; tail-base now 0x{1:X}\".format(len(data), SB.ReadDoubleWord(0x20012894)))"
+python "import System; SB=self.Machine.SystemBus; data=System.IO.File.ReadAllBytes(\"scripts/silabs-vuln/aliro_boot_sram.bin\"); SB.WriteBytes(data, 0x20000000, False, None); System.Console.WriteLine(\"OVERLAY restored {0} bytes; tail-base now 0x{1:X}\".format(len(data), SB.ReadDoubleWord(0x20012894)))"
 
 # fresh log
 python "import System; System.IO.File.WriteAllText('/tmp/e2e_fidelity.txt','=== ALIRO E2E FIDELITY (live overflow bytes replay) ===\n')"
