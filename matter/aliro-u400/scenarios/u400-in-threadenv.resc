@@ -1,0 +1,29 @@
+:name: U400 boot under the Thread/Matter ground-truth environment
+:description: Boots the Aqara U400 Aliro firmware inside the EXACT same platform/bridge setup used by the working Thread/Matter e2e scenarios (brd2601b.repl + phase3-bridges.repl + BLE/802.15.4 mediums), instead of the standalone boot_mg24.resc harness, to see whether the radio-init spin behaves differently with the bridges connected.
+# Mirrors matter/renode-thread/scenarios/e2e-15.4-fragrx.resc structure; only the ELF + vector table differ.
+
+mach create "stock"
+machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
+machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
+sysbus LoadELF @matter/aliro-u400/firmware/U400_primary_target.elf
+cpu VectorTableOffset 0x08006000
+cpu PerformanceInMips 39
+seqcpu PerformanceInMips 39
+emulation CreateBLEMedium "wireless"
+connector Connect sysbus.radio wireless
+connector Connect sysbus.bleCentral wireless
+connector Connect sysbus.ieee802154 wireless
+emulation SetGlobalSerialExecution true
+emulation SetGlobalAdvanceImmediately false
+logFile @/tmp/u400-threadenv.log true
+logLevel 2
+logLevel 1 sysbus.radio
+
+emulation RunFor "3.0"
+pause
+
+echo ">>> PC after 3s (compare to standalone-harness result 0x808105c):"
+sysbus.cpu PC
+echo ">>> instruction at that PC:"
+sysbus ReadWord `sysbus.cpu PC`
+quit

