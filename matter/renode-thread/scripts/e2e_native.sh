@@ -23,6 +23,33 @@ pkill -9 -f Renode.dll 2>/dev/null; pkill -9 -f ot-cli-ftd 2>/dev/null; pkill -9
 rm -f "$HOME"/.matter* /tmp/chip_tool_kvs* /tmp/chip_* 2>/dev/null   # clear stale chip-tool commissioning state
 sleep 1
 
+# --- stray/port guard (HANDOFF gotcha #7) -------------------------------------------------------
+# `./renode` spawns dotnet/setsid children that survive a parent kill. A leftover Renode holds
+# port 3500 (BleCentralBridge's CHIPoBLE socket), and chip-tool then fails with a misleading
+# "FakeBleTransport: connect() failed: Connection refused" instead of anything pointing at the cause.
+# Verify the kill actually took, and that 3500 is free, before booting a fresh Renode.
+# Match only real Renode processes: `dotnet .../Renode.dll`. pgrep -f alone would also match this
+# script's own ancestor shell (its command line contains "Renode.dll"), so filter on comm==dotnet.
+strays=""
+for pid in $(pgrep -f 'Renode\.dll' 2>/dev/null); do
+    [ "$(cat /proc/"$pid"/comm 2>/dev/null)" = "dotnet" ] && strays="$strays $pid"
+done
+if [ -n "${strays// }" ]; then
+    echo "FATAL: Renode still running after pkill (pids:$strays)."
+    echo "       Kill them and retry:  pkill -9 -f Renode.dll ; pkill -9 -f ot-cli-ftd"
+    exit 3
+fi
+if command -v ss >/dev/null 2>&1; then port_busy=$(ss -ltn 2>/dev/null | grep -c ':3500 '); \
+    else port_busy=$(netstat -ltn 2>/dev/null | grep -c ':3500 '); fi
+if [ "${port_busy:-0}" -gt 0 ]; then
+    echo "FATAL: port 3500 is already in use (a previous Renode/BleCentralBridge is holding it)."
+    echo "       chip-tool would fail with 'connect() failed: Connection refused'. Free it first:"
+    echo "       pkill -9 -f Renode.dll ; then check:  ss -ltnp | grep 3500"
+    exit 3
+fi
+echo "    port 3500 free, no stray Renode -- OK to boot"
+# ------------------------------------------------------------------------------------------------
+
 echo "### 1) start Renode (stock fw + bridges) headless on telnet 3456"
 cd "$R"
 SCENARIO="${SCENARIO:-matter/renode-thread/scenarios/e2e-15.4.resc}"
