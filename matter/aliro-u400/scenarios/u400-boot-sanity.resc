@@ -1,0 +1,22 @@
+:name: Aliro U400 boot sanity (new profile, this sl-renode tree)
+:description: Boots the Aqara U400 Aliro firmware on emulated EFR32MG24 (brd4186c) and confirms the vulnerable handler bytes at 0x805e7b0 match the objdump ground truth.
+# Ground-truth reference run: /home/chen/sl-renode + /home/chen/aliro-reassembly-audit/renode/*.
+
+$bin=@/home/chen/matter-renode-work/sl-renode/matter/aliro-u400/firmware/U400_primary_target.elf
+$vtor=0x08006000
+include @scripts/silabs-vuln/boot_mg24.resc
+
+emulation RunFor "0.4"
+pause
+
+echo ">>> handler @0x805e7b0 first word (expect 0x43f0e92d = 'e92d 43f0'):"
+sysbus ReadDoubleWord 0x805e7b0
+echo ">>> handler @0x805e7b4 next word (expect 0x4605b089):"
+sysbus ReadDoubleWord 0x805e7b4
+echo ">>> CoC callback vtable RAM @0x2000282c (expect 0x0805e7b1 = on_data_received|thumb):"
+sysbus ReadDoubleWord 0x2000282c
+echo ">>> vtable[0] @0x20002828 (expect 0x0805e46d = TX provider|thumb):"
+sysbus ReadDoubleWord 0x20002828
+echo ">>> PC after 0.4s boot:"
+sysbus.cpu PC
+quit

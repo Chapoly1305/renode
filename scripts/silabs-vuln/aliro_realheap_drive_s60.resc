@@ -1,0 +1,3 @@
+:name: realheap_drive wrapper sdu=0x60
+$sdu=0x60
+include @scripts/silabs-vuln/aliro_realheap_drive.resc

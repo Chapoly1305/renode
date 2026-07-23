@@ -1,0 +1,59 @@
+:name: ZB-03 STEP 0 diagnostic
+:description: Does sub_22E06 reach its epilogue pop NATURALLY (entry[4] seeded, benign spin target)?
+
+$bin=@scripts/silabs-vuln/zb03_innr.elf
+include @scripts/silabs-vuln/boot_mg21.resc
+logLevel 3
+
+cpu AddHook 0xc5f2  "self.ErrorLog('MARK_C5F2_DISPATCH')"
+cpu AddHook 0xc64a  "self.ErrorLog('MARK_C64A_TO_22E06')"
+cpu AddHook 0x22e06 "self.ErrorLog('MARK_22E06_ENTRY')"
+cpu AddHook 0x22e5c "self.ErrorLog('MARK_22E5C_GATE_OK (case-0x8004 body)')"
+cpu AddHook 0x22f0e "self.ErrorLog('MARK_22F0E post-record-loop -> bl sub_22FD2')"
+cpu AddHook 0x22fc2 "self.ErrorLog('MARK_22FC2 -> bl sub_22DE0 (handler dispatch)')"
+cpu AddHook 0x22dea "self.ErrorLog('MARK_22DEA blx entry[4] (registered handler)')"
+cpu AddHook 0x22dec "self.ErrorLog('MARK_22DEC handler RETURNED to sub_22DE0')"
+cpu AddHook 0x22fc6 "self.ErrorLog('MARK_22FC6 (sub_22DE0 returned -> pre-epilogue)')"
+cpu AddHook 0x22fce "self.ErrorLog('MARK_22FCE EPILOGUE POP {..,pc} (natural return imminent)')"
+cpu AddHook 0x20006e00 "self.ErrorLog('SPIN TARGET REACHED @0x20006E00 (natural pop consumed corrupted LR)')"
+
+emulation RunFor "0.3"
+pause
+echo ">>> post-boot PC:"
+cpu PC
+
+sysbus WriteByte 0x2000FFAA 0x01
+sysbus WriteDoubleWord 0x2000F434 0x00000001
+sysbus WriteDoubleWord 0x2000F43C 0x00000004
+# entry[4] @0x2000F438 = 0x00022FED : registered-handler fn-ptr -> bx lr stub (Thumb)
+sysbus WriteDoubleWord 0x2000F438 0x00022FED
+
+python "for a in range(0x20002000,0x200020C0,4): monitor.Machine.SystemBus.WriteDoubleWord(a,0)"
+sysbus WriteDoubleWord 0x20002008 0x3A000000
+sysbus WriteDoubleWord 0x2000207C 0x20006E01
+sysbus WriteDoubleWord 0x20002200 0x80040000
+sysbus WriteDoubleWord 0x20007000 0x0000000D
+sysbus WriteDoubleWord 0x20007004 0x20002000
+
+# benign spin target: b . (0xe7fe) at 0x20006E00, entered via LR=0x20006E01
+sysbus WriteDoubleWord 0x20006E00 0x0000E7FE
+
+sysbus WriteDoubleWord 0x20006FBC 0xAABBCCDD
+echo ">>> BEFORE: saved-LR slot @0x20006FBC ="
+sysbus ReadDoubleWord 0x20006FBC
+
+sysbus.cpu SetRegister 0  0x00000000
+sysbus.cpu SetRegister 1  0x20002200
+sysbus.cpu SetRegister 2  0x00000000
+sysbus.cpu SetRegister 3  0x00000000
+sysbus.cpu SetRegister 13 0x20007000
+sysbus.cpu SetRegister 14 0x0000DEAD
+sysbus.cpu PC 0xc5f2
+
+emulation RunFor "0.01"
+pause
+echo ">>> AFTER: saved-LR slot @0x20006FBC (expect 0x20006E01) ="
+sysbus ReadDoubleWord 0x20006FBC
+echo ">>> AFTER: PC (expect 0x20006E00 if natural epilogue reached the spin target) ="
+cpu PC
+quit

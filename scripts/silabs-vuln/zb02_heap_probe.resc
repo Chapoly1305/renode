@@ -1,0 +1,44 @@
+:name: ZB-02 heap layout probe — observe the real allocator (sub_1411c) and pool structure
+:description: Boots the real Aqara feeder firmware and inspects the inline-header free-list heap that the segmented-reassembly buffer is allocated from: reads the two pool heads ([0x2000456c] small, [0x200059cc] large) + selector flag [0x20004568], dumps the pool region, and calls sub_1411c directly a few times to reveal block headers (16-bit: 15-bit size + bit15 in-use) and where blocks land relative to each other. This establishes what is ADJACENT to the reassembly buffer that the OOB write (sub_14D08) can corrupt.
+
+$bin=@scripts/silabs-vuln/zb02_aqara.elf
+include @scripts/silabs-vuln/boot_mg21.resc
+
+emulation RunFor "0.3"
+pause
+echo ">>> post-boot PC:"
+cpu PC
+
+echo ">>> heap selector flag [0x20004568]:"
+sysbus ReadByte 0x20004568
+echo ">>> small-pool head ptr [0x2000456c]:"
+sysbus ReadDoubleWord 0x2000456c
+echo ">>> large-pool head ptr [0x200059cc]:"
+sysbus ReadDoubleWord 0x200059cc
+echo ">>> reassembly ctx [0x20004608..0x20004614] (ctx[4]=num_seg, ctx[8]=alloc base):"
+sysbus ReadDoubleWord 0x20004608
+sysbus ReadDoubleWord 0x2000460C
+sysbus ReadDoubleWord 0x20004610
+sysbus ReadDoubleWord 0x20004614
+
+# --- Call the allocator sub_1411c(size) directly to see block layout ---
+# alloc #1: 120 bytes (= 2 segments * 60, the reassembly-buffer size for num_seg=2)
+sysbus.cpu SetRegister 13 0x2000FF00
+sysbus.cpu SetRegister 14 0x00009001
+sysbus.cpu SetRegister 0  120
+sysbus.cpu PC 0x1411c
+cpu AddHook 0x9000 "self.ErrorLog('ALLOC1 returned r0 = 0x{0:X}'.format(self.GetRegister(0).RawValue))"
+sysbus.cpu Step 200
+echo ">>> ALLOC1 (size 120) returned ptr:"
+cpu GetRegister 0
+
+# alloc #2: another 120 bytes to see the NEXT block placement + header of the gap
+sysbus.cpu SetRegister 13 0x2000FF00
+sysbus.cpu SetRegister 14 0x00009001
+sysbus.cpu SetRegister 0  120
+sysbus.cpu PC 0x1411c
+sysbus.cpu Step 200
+echo ">>> ALLOC2 (size 120) returned ptr:"
+cpu GetRegister 0
+
+quit

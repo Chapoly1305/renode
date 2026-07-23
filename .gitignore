@@ -26,3 +26,17 @@ packages
 perf.data
 perf.script
 .venv
+
+# --- Aliro/U400 consolidation: copyrighted firmware + firmware-derived + big build dumps ---
+matter/aliro-u400/firmware/
+**/fuzzware/**/*.bin
+**/*.ota
+**/*.gbl
+**/U400*.elf
+**/U400*.bin
+*.out
+scripts/silabs-vuln/*.elf
+scripts/silabs-vuln/*.bin
+matter/aliro-u400/scenarios/*.bin
+matter/aliro-u400/fuzzware/seeds/
+silabs-vuln-devices/**/*.elf
