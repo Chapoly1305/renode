@@ -200,11 +200,19 @@ indicate 0x0019). Reference scenario style: `matter/renode-thread/scenarios/e2e-
   assert → assert:
   `0x808105c → (patch sub_80e3d60) 0x80fd44e → (patch sub_80e3e56) 0x80fd45a → (patch full 0x80fd4xx cluster) 0x803e736`
   (`sub_80e3dce` assert ×3 in `sub_803e6d8`).
-- **Root machinery (all asserts share it):** `sub_80cec04→sub_80d2f6c` / `sub_80cec9c→sub_80d2e24→sub_80d2e02` opens a
-  RAIL cfg handle, reads a PA/cfg object at `*(handle+0x24)`, runs a power-curve/config computation
-  (`sub_80d58a2/sub_801bfcc/sub_801aecc`) that **fails because the emulated radio returns 0 for the RF-cal/state it
-  depends on**. Even fully NOPed, the model emits **no advertising PDUs**, and the RAC/SYNTH + I2C poll loops
-  (`sub_803266c`) spin (their back-edges core-dump if NOPed).
+- **CORRECTION (2026-07-23, verified in Renode) — the `0x808105c` gate is NOT an MMIO/RF-cal problem; it is pure-software
+  RAIL PA/TxPower config.** The gate is in `sub_8081030`: `r0=sub_80e3d60(...); if(r0==0) ok; else b .`. Empirically
+  `sub_80e3d60` **returns `0x1`** (not an `0xffffffXX` RAIL code) because `sub_80cec04→sub_80d2f6c` returns nonzero.
+  Refuted theories: (a) the PA-descriptor allocator RAM ptr `0x20001530` is **installed** (`=0x80E3711`), not NULL;
+  (b) the mutex path is fine — lock/unlock fns `*0x2000153c`/`*0x20001538` are installed and the lock fn (`0x80cdd0a`)
+  runs OK on the mutex arg `0x200134bc` (which reads 0 but is tolerated). **`sub_80d2f6c` fails BEFORE its PA-alloc loop:
+  `sub_80d2be4` and the allocator `0x80e3710` are never reached.** So the failure is in the handle-open path
+  `sub_8017240` (→ `sub_80d277c` validation or `sub_8018de4` handle-alloc) or `sub_80d2f6c`'s own pre-loop checks — a
+  RAIL software config/descriptor issue over flash tables, still to be pinned. This path touches **no radio MMIO**, so
+  seeding RF-cal register values does NOT help it. The genuine radio MMIO (SYNTH-lock/RAC/MODEM + advertising TX) is on
+  the RAIL PHY-start path reached only AFTER this gate; the radio register-bank base for that path is not yet located.
+  (The power-curve fns `sub_80d58a2/sub_801bfcc/sub_801aecc` validate struct magics `0x4100`/`0x80000020`/`0xb0000020`,
+  not radio registers.)
 - **Handshake the firmware waits on (for the radio-model dev):** POLLS (not IRQ) RAC status bits `0x200/0x400/0x80/0x40`,
   a SYNTH "lock" bit, MODEM status, plus a two-core RAC **Storage0 mailbox** (the model already has a livelock-breaker at
   `SiLabs_xG24_LPW.cs:209-269`). Earlier-catalogued blocking reads: RF-cal tokens `deviceInformation` 0x0/0x248/0x24C/0x260;
@@ -295,11 +303,31 @@ then craft `D_B` to serve double duty (dispatch fields + handle fields — the 0
 full producer tail runs clean in `aliro_e2e_chain.resc`. Upgrades the primitive from "strong A/B, partial C" to
 "demonstrated C (emulation)".
 
-### 9c. Radio-model dev → real emulated BLE  ← big, uncertain, but the only path to "real BLE triggers U400"
-Author the RAC/SYNTH/MODEM bring-up + RF-cal in `SiLabs_xG24_LPW.cs` (§7). If achieved, U400 advertises → connect via
-`BleCentralBridge` → GATT → open L2CAP CoC on SPSM 0x0080 → run the real exploit end-to-end under the real scheduler
-(subsumes 9a + 9b). Multi-day; no factory cal values; still emulation (no motor model). Do only if 9b's cheaper answer
-isn't enough.
+### 9c-A. Radio-model dev → real emulated BLE  ← big, uncertain (NOT pursued; see 9c-B instead)
+Author the RAC/SYNTH/MODEM bring-up + RF-cal in `SiLabs_xG24_LPW.cs` (§7). Investigation (2026-07-23) reframed this:
+the `0x808105c` init gate is **pure-software RAIL config, not MMIO/RF-cal** (see §7 CORRECTION) — `sub_80e3d60` returns
+`0x1` from a `sub_80d2f6c` handle-open failure that touches no radio register, so "seed cal values" doesn't apply. The
+genuine radio-TX MMIO (SYNTH-lock/RAC/MODEM + advertising) is a further, un-located layer. Multi-day, uncertain, no
+factory cal values. Abandoned in favor of 9c-B.
+
+### 9c-B. Real exploit at the L2CAP layer on the LIVE RTOS (radio bypassed)  ← DONE (front half), best value
+Skip the whole radio init and feed the attacker's crafted L2CAP transfer straight into the firmware's REAL
+reassembly/dispatch handler `sub_801d96c` on the **live-booted RTOS** (§9b boot). Scenario
+`matter/aliro-u400/scenarios/u400-9c-B-live-l2cap-exploit.resc`. **DEMONSTRATED:** the firmware's own `blx r7`
+(@0x0801d9be) dispatches to a forged target = motor **producer `sub_8072174`** with a forged **unlock** command struct
+(`cmd.name=0x081505ac`, len 8, speed 0xC8), and the producer **publishes `door_unlock`** to the pid_motor mbus, giving
+the exact semaphore (`0x20034090`) the live consumer waits on — all real firmware. This is the §3 primitive (controlled
+`blx` target + arg) realized on live firmware. Forged objects live in scratch `0x30000xxx`; the forged transfer is
+registered into the (empty) live L2CAP desc array `0x2001b758` + SDK RX list `0x20013878` (verified empty post-boot, no
+active CoC). Descriptor layout mirrors `aliro_e2e_chain.resc` op3.
+**Seam (not yet closed in ONE run):** the single-run hand-off to the consumer does not fire, because the producer is
+reached by HIJACKING the low-prio console task, so it runs its RTOS interaction (beep, "motor_moving", timers) in the
+WRONG task context and disturbs the scheduler; the post-publish switch to the prio-31 consumer doesn't happen even
+though the correct semaphore is given. This is an **injection-context artifact, not firmware behavior** — on real HW the
+producer runs as `pid_motor_task`. The consumer half (door_unlock → autonomous wake → `sub_80714F4` → `sub_806DA24`) is
+proven in `u400-9b-inject-unlock.resc`. So the COMPLETE attack path is demonstrated across the two live-RTOS scenarios;
+only the radio transport + this seam are bypassed. Next to fully close it: drive the producer in a real task context
+(e.g. via the ble_app task) or resolve the r0/task-context gap (relates to 9a).
 
 ---
 
