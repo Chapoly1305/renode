@@ -1,0 +1,47 @@
+:name: U400 BLE bring-up experiment (Stage 1 feasibility probe)
+:description: Boots the Aqara U400 Aliro firmware on the emulated EFR32MG24 (brd4186c) and attempts to push it PAST the radio-PA-config spin (0x808105c) toward BLE advertising. Applies the validated least-invasive firmware-side knobs (force the RAIL radio-config primitives to succeed) and samples PC over time to MAP the cascade of radio-init walls. FINDING: the walls are a cascade of RAIL radio-config asserts that all bottom out in ONE unmodeled dependency -- the EFR32 radio config-object / RF-calibration machinery. Each firmware-side bypass only reveals the next assert. Stock firmware advertises in this same rig (BLE transport is intact -- see e2e-15.4.resc).
+
+$bin=@/home/chen/aliro-renode/matter/aliro-u400/firmware/U400_primary_target.elf
+$vtor=0x08006000
+include @scripts/silabs-vuln/boot_mg24.resc
+
+# ---------------------------------------------------------------------------
+# Least-invasive firmware-side knobs. Each forces a RAIL radio-config primitive
+# to return 0 (success): "movs r0,#0 ; bx lr" = WriteWord 0x2000 then 0x4770.
+# These primitives (sub_80e3xxx family) all FAIL against the emulated radio
+# because the config-object computation reads radio state/calibration the model
+# returns as 0. Patching them one-by-one just marches to the next assert:
+#
+#   (no patch)                     -> 0x808105c  (wall #1: PA-config sub_80e3d60)
+#   +0x80e3d60                     -> 0x80fd44e  (wall #3a: sub_80e3e56 assert)
+#   +0x80e3e56                     -> 0x80fd45a  (wall #3b: sub_80e3e86 assert)
+#   +the 0x80fd4xx cluster (below) -> 0x803e736  (wall #4: sub_80e3dce assert x3)
+#
+# NOTE: do NOT NOP the eventual RAC/SYNTH and I2C poll loops (sub_803266c etc.);
+# NOPing poll-loop back-edges corrupts control flow and core-dumps. Those loops
+# spin because the modeled radio never reaches "operational/locked" and the lock's
+# I2C peripherals (motor/SE/sensors) have no bus slaves -- both need a real model.
+# ---------------------------------------------------------------------------
+
+# wall #1: PA-config
+sysbus WriteWord 0x80e3d60 0x2000
+sysbus WriteWord 0x80e3d62 0x4770
+# wall #3 cluster primitives (wrapped by asserts at 0x80fd440/44e/45a/468)
+sysbus WriteWord 0x80e3e46 0x2000
+sysbus WriteWord 0x80e3e48 0x4770
+sysbus WriteWord 0x80e3e56 0x2000
+sysbus WriteWord 0x80e3e58 0x4770
+sysbus WriteWord 0x80e3e86 0x2000
+sysbus WriteWord 0x80e3e88 0x4770
+sysbus WriteWord 0x80e3e96 0x2000
+sysbus WriteWord 0x80e3e98 0x4770
+
+echo ">>> Booting U400 with RAIL radio-config bypass; sampling PC (expect stall at 0x803e736 -- next radio-config assert):"
+emulation RunFor "0.2"
+echo "PC @0.2s:"; sysbus.cpu PC
+emulation RunFor "0.8"
+echo "PC @1.0s:"; sysbus.cpu PC
+emulation RunFor "2.0"
+echo "PC @3.0s:"; sysbus.cpu PC
+pause
+quit

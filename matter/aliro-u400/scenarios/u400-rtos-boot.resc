@@ -1,0 +1,73 @@
+:name: U400 boot-to-running-RTOS (foundation for the §9b inject-and-run test)
+:description: Boots the Aqara U400 Aliro firmware on the emulated EFR32MG24 (brd4186c) all the way to a RUNNING FreeRTOS -- app tasks created, scheduler context-switching -- by stubbing the three unmodeled boot-time hardware dependencies that otherwise hang the boot CPU BEFORE any application task is created. Leaves the machine booted and paused (no quit) so it can be `include`d by an experiment script that then injects/observes. See HANDOFF-NATIVE-DEBUG.md §9b.
+
+# ---------------------------------------------------------------------------
+# FINDING (2026-07-23, this branch): the handoff §9b assumed "boot with the radio
+# spin bypassed -> scheduler + tasks alive". That premise was WRONG as stated:
+# the radio bring-up + I2C + filesystem mount all run on the boot path BEFORE the
+# application task-creation function sub_8038d44, so under the plain RAIL bypass
+# NO application task is ever created (verified: at the 0x803e736 stall, sub_8038d44
+# has not run). Reaching task creation requires stubbing THREE unmodeled subsystems
+# whose poll/assert loops hang the single boot thread:
+#
+#   1. Radio config-validator sub_80e3dce -> return 0 (success).
+#      Without this: b . (infinite loop) at 0x803e736 (assert in sub_803e6d8,
+#      cbz r0 -> nonzero return == failure). This is the wall the old bringup
+#      scenario bottomed out at.
+#   2. I2C transfer state-machine sub_803266c -> return 0 (transaction done).
+#      Without this: spins in its own while(true) at 0x8032680.. polling the I2C
+#      IF register (*(base+0x3c)) for flags 0x40/0x80/0x20 that never arrive
+#      (no I2C slave modeled; base 0x5B000000 I2C0 / 0x50068000 I2C1).
+#   3. Filesystem mount sub_804b8e0 -> return 1 (pretend already-mounted).
+#      Without this: hangs in flash/littlefs reads (load_file_index retry-logging)
+#      because the fs partition is not backed by the ELF image.
+#
+# WITH all three: boot reaches sub_8040e44 (app-main task) -> sub_8038d44 ->
+# creates ALL worker tasks incl. pid_motor CONSUMER sub_80718FC (prio 0x1f) and
+# producer sub_8072174. Verified the consumer RUNS then blocks on its mailbox,
+# and the scheduler context-switches (PendSV @0x08006430 fires ~32/s). Silabs
+# FreeRTOS uses a hardware timer (not ARM SysTick @0x080CEF48) for its tick.
+#
+# CAVEAT: one early task sub_80e2cb0 busy-spins (0x80e2d98<->0x80e2d9c, likely a
+# companion-chip/peripheral wait); the scheduler still preempts it, so a post to
+# the prio-31 consumer mailbox will still wake the consumer. This is EMULATION:
+# no motor model, so "physical motion" remains unobservable -- the §9b test
+# confirms the consumer AUTONOMOUSLY reaches the drive fn, nothing more.
+#
+# The RAIL-primitive knobs (sub_80e3d60 / sub_80e3e46.. family) are retained from
+# the old bringup scenario; harmless, and keep the radio-config path quiet.
+# ---------------------------------------------------------------------------
+
+$bin?=@/home/chen/aliro-renode/matter/aliro-u400/firmware/U400_primary_target.elf
+$vtor?=0x08006000
+include @scripts/silabs-vuln/boot_mg24.resc
+
+# --- RAIL radio-config primitive knobs (return success) ---
+sysbus WriteWord 0x80e3d60 0x2000
+sysbus WriteWord 0x80e3d62 0x4770
+sysbus WriteWord 0x80e3e46 0x2000
+sysbus WriteWord 0x80e3e48 0x4770
+sysbus WriteWord 0x80e3e56 0x2000
+sysbus WriteWord 0x80e3e58 0x4770
+sysbus WriteWord 0x80e3e86 0x2000
+sysbus WriteWord 0x80e3e88 0x4770
+sysbus WriteWord 0x80e3e96 0x2000
+sysbus WriteWord 0x80e3e98 0x4770
+
+# --- (1) radio config-validator sub_80e3dce -> return 0 ---
+sysbus WriteWord 0x80e3dce 0x2000
+sysbus WriteWord 0x80e3dd0 0x4770
+
+# --- (2) I2C transfer state-machine sub_803266c -> return 0 ---
+sysbus WriteWord 0x803266c 0x2000
+sysbus WriteWord 0x803266e 0x4770
+
+# --- (3) filesystem mount sub_804b8e0 -> return 1 (already mounted) ---
+sysbus WriteWord 0x804b8e0 0x2001
+sysbus WriteWord 0x804b8e2 0x4770
+
+echo ">>> U400 booting to running RTOS (radio/I2C/fs stubbed) ..."
+emulation RunFor "4.0"
+echo ">>> Boot complete. PC (expect a running task, e.g. ~0x80e2d9x spin or elsewhere):"
+sysbus.cpu PC
+echo ">>> pid_motor consumer sub_80718FC is created and blocked on its mailbox; scheduler is live."

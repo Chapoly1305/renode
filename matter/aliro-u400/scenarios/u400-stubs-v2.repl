@@ -1,0 +1,31 @@
+// U400 bring-up stubs (updated for the current 26q1 tree).
+//
+// IMPORTANT CHANGE vs the original: in this tree I2C0 (0x5B000000) is now a REAL
+// modeled peripheral (I2C.EFR32_I2CController in efr32xG24.repl), so you CANNOT
+// overlay a PythonPeripheral inside its 0x5B000000..0x5B003FFF window -- doing so
+// throws "conflicts with peripheral ... EFR32_I2CController". Only I2C1
+// (0x50068000_NS / 0x40068000_S) is still merely Tagged (reads return 0).
+//
+// This overlay therefore stubs ONLY the still-unmodeled regions the U400 door-lock
+// boot path touches. It is a *diagnostic aid* for pushing the boot forward -- it is
+// NOT sufficient to reach BLE advertising (the radio-config machinery, not these
+// regs, is the real blocker; see u400-ble-bringup.resc / BLE-BRINGUP-FINDINGS).
+
+// --- I2C1_NS interrupt-flag (base+0x3c). The lock's I2C transfer state machine
+//     sub_803266c polls this for ACK(0x40) | MSTOP(0x100) | RXDATAV(0x20) = 0x160
+//     to mean "transfer OK". I2C1 has no modeled bus slaves, so a real transfer
+//     never completes; returning 0x160 lets the poll loop exit. (I2C0 must instead
+//     be handled with a modeled slave device, since it is a real controller.)
+i2c1_if: Python.PythonPeripheral @ sysbus 0x5006803C
+    size: 0x4
+    initable: true
+    script: "request.Value = 0x160"
+
+// --- SMU_S / SMU_NS security-management-unit (Tagged only). The boot path writes
+//     TrustZone attribution here; back it with benign RAM so reads/writes stick
+//     instead of hitting non-existing-peripheral warnings.
+smu_s: Memory.MappedMemory @ sysbus 0x44008000
+    size: 0x4000
+
+smu_ns: Memory.MappedMemory @ sysbus 0x54008000
+    size: 0x4000

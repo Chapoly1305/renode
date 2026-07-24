@@ -1,0 +1,75 @@
+:name: U400 §9b inject-and-run -- autonomous door_unlock under the real scheduler
+:description: Boots the Aqara U400 firmware to a running FreeRTOS (radio/I2C/fs stubbed), then INJECTS a real mbus "door_unlock" publish exactly as the producer sub_8072174 does (sub_80c8f68("pid_motor","door_unlock",&payload,8)) and observes the prio-31 pid_motor CONSUMER task sub_80718FC autonomously WAKE under the real scheduler, dequeue the message, call the unlock actuator sub_80714F4, pass the "already-unlocked" guard sub_8070818, and reach the motor DRIVE function sub_806DA24. This is the §9b result: the actuation code path is reached AUTONOMOUSLY (not hand-stitched). Still emulation -- no motor model, so physical motion is unobservable; this proves code-path reachability under the genuine RTOS scheduler.
+
+# ---------------------------------------------------------------------------
+# RESULT (2026-07-23, this branch). Trace excerpt (end of run):
+#   TRAP r0=0x0                                  ; injected sub_80c8f68 publish returned success
+#   CONSUMER_GOT_MSG                             ; blocked consumer sub_80718FC woke & dequeued
+#   *** UNLOCK_ACTUATOR sub_80714f4 arg0=0xC8 ** ; consumer called unlock actuator w/ injected speed
+#   UNLOCK_GUARD sub_8070818                     ; already-unlocked guard ran (returned proceed)
+#   *** DRIVE sub_806da24 ***                    ; reached the motor drive function
+# arg0=0xC8 == the speed byte in the injected payload -> proves the consumer processed OUR message.
+#
+# WHY THIS RECIPE (hard-won; see HANDOFF-NATIVE-DEBUG.md §9b):
+#  * 3 boot stubs get to a running RTOS with the consumer created + blocked on its mailbox
+#    semaphore (handle 0x20034090). See u400-rtos-boot.resc.
+#  * The FreeRTOS scheduler tick runs WITHOUT BURTC (PendSV @0x08006430 fires ~32/s; the tick
+#    uses SysRTC/SysTick, NOT the BURTC HAL timebase). So a readied task CAN be switched to.
+#  * WITHOUT BURTC the HAL delay sub_80e2d7a busy-spins forever at 0x80e2d98 (reads unmodeled
+#    BURTC CNT @0x50064020) -- this spin is a RELIABLE, actively-executing, thread-mode injection
+#    point. (Modeling BURTC removes this spin but then boot hangs at a b. @0x80d4904 -- a further
+#    unmodeled dependency; not needed for this test.)
+#  * The mbus publish sub_80c8f68 gives the mailbox semaphore via a TASK path (sub_8011554) or an
+#    ISR path (sub_80111d0) chosen by xPortIsInsideInterrupt (sub_80e2cb4, reads IPSR). Injecting
+#    ONLY when the CPU is in thread mode (ICSR VECTACTIVE==0) forces the task path, which requests
+#    a proper yield. We also force PENDSVSET in the trap for good measure.
+#  * Renode halts the core on b./WFI "wait" states, so paused-PC injection won't execute; a HOOK at
+#    an actively-executing instruction is required -> the console spin at 0x80e2d98.
+# ---------------------------------------------------------------------------
+
+$bin?=@/home/chen/aliro-renode/matter/aliro-u400/firmware/U400_primary_target.elf
+$vtor?=0x08006000
+include @scripts/silabs-vuln/boot_mg24.resc
+machine LoadPlatformDescriptionFromString "scratch: Memory.MappedMemory @ sysbus 0x30000000 { size: 0x1000 }"
+
+# --- boot-to-running-RTOS stubs (see u400-rtos-boot.resc for rationale) ---
+sysbus WriteWord 0x80e3d60 0x2000
+sysbus WriteWord 0x80e3d62 0x4770
+sysbus WriteWord 0x80e3e46 0x2000
+sysbus WriteWord 0x80e3e48 0x4770
+sysbus WriteWord 0x80e3e56 0x2000
+sysbus WriteWord 0x80e3e58 0x4770
+sysbus WriteWord 0x80e3e86 0x2000
+sysbus WriteWord 0x80e3e88 0x4770
+sysbus WriteWord 0x80e3e96 0x2000
+sysbus WriteWord 0x80e3e98 0x4770
+sysbus WriteWord 0x80e3dce 0x2000
+sysbus WriteWord 0x80e3dd0 0x4770
+sysbus WriteWord 0x803266c 0x2000
+sysbus WriteWord 0x803266e 0x4770
+sysbus WriteWord 0x804b8e0 0x2001
+sysbus WriteWord 0x804b8e2 0x4770
+
+# return trap (b . landing pad for the injected publish's LR)
+sysbus WriteWord 0x30000100 0xe7fe
+
+# --- observation hooks (the §9b evidence) ---
+sysbus.cpu AddHook 0x80c8ea2 "self.ErrorLog('9B: CONSUMER_GOT_MSG (sub_80718FC dequeued the mbus message)')"
+sysbus.cpu AddHook 0x80714f4 "self.ErrorLog('9B: *** UNLOCK_ACTUATOR sub_80714f4 CALLED, arg0(speed)=0x{0:X} ***'.format(self.GetRegister(0).RawValue))"
+sysbus.cpu AddHook 0x8070818 "self.ErrorLog('9B: UNLOCK_GUARD sub_8070818 (already-unlocked check)')"
+sysbus.cpu AddHook 0x806da24 "self.ErrorLog('9B: *** DRIVE sub_806da24 REACHED (motor drive fn) ***')"
+
+# --- return trap: restore hijacked-task context, force a context switch, disarm the hot hook ---
+sysbus.cpu AddHook 0x30000100 "from Antmicro.Renode.Peripherals.CPU import RegisterValue as R; b=self.Bus; self.ErrorLog('9B: TRAP injected publish returned r0=0x{0:X}'.format(self.GetRegister(0).RawValue)); [self.SetRegister(i,R.Create(b.ReadDoubleWord(0x30000020+4*i),32)) for i in range(16)]; b.WriteDoubleWord(0xe000ed04,0x10000000); self.RemoveHooksAt(0x80e2d98)"
+
+# --- injection: at the console busy-spin, ONLY in thread mode, publish door_unlock once ---
+# saves r0..r15 to scratch, writes 8-byte payload {speed=0xC8, wait=0}, sets up
+# sub_80c8f68("pid_motor"=0x0814F76C, "door_unlock"=0x0814F9C8, &payload=0x30000010, 8), LR=trap.
+sysbus.cpu AddHook 0x80e2d98 "from Antmicro.Renode.Peripherals.CPU import RegisterValue as R; b=self.Bus; f=b.ReadDoubleWord(0x30000000); thr=((b.ReadDoubleWord(0xe000ed04)&0x1ff)==0); (None if (f!=0 or not thr) else [b.WriteDoubleWord(0x30000000,1)]+[b.WriteDoubleWord(0x30000020+4*i,self.GetRegister(i).RawValue) for i in range(16)]+[b.WriteDoubleWord(0x30000010,0xC8), b.WriteDoubleWord(0x30000014,0), self.SetRegister(0,R.Create(0x0814F76C,32)), self.SetRegister(1,R.Create(0x0814F9C8,32)), self.SetRegister(2,R.Create(0x30000010,32)), self.SetRegister(3,R.Create(8,32)), self.SetRegister(14,R.Create(0x30000101,32)), self.SetRegister(15,R.Create(0x080c8f68,32))])"
+
+echo ">>> Booting U400 to running RTOS ..."
+emulation RunFor "4.0"
+echo ">>> Injecting door_unlock mbus publish; observing autonomous consumer wake -> actuator -> drive:"
+emulation RunFor "1.5"
+echo ">>> Done (see 9B: log lines above for the autonomous chain)."
+quit
