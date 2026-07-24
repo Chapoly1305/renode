@@ -320,24 +320,30 @@ the exact semaphore (`0x20034090`) the live consumer waits on — all real firmw
 `blx` target + arg) realized on live firmware. Forged objects live in scratch `0x30000xxx`; the forged transfer is
 registered into the (empty) live L2CAP desc array `0x2001b758` + SDK RX list `0x20013878` (verified empty post-boot, no
 active CoC). Descriptor layout mirrors `aliro_e2e_chain.resc` op3.
-**Seam (not yet closed in ONE run) — ROOT CAUSE identified (2026-07-23):** the single-run hand-off to the consumer does
-not fire. Verified cause: the producer's pid_motor publish give goes via the **FromISR path** (`sub_80111d0`
-xSemaphoreGiveFromISR, logged `xSemGiveISR h=0x20034090`), whereas §9b's short direct publish goes **task-path**
-(`sub_8011554` xSemaphoreGive). The producer is long, so a tick ISR is active at the give → IPSR≠0 → `sub_80e2cb4`
-(xPortIsInsideInterrupt) picks the ISR path. A FromISR give with a NULL woken-token defers the wake (pending-ready) and
-requests no yield, so a forced `PENDSVSET` (which only runs vTaskSwitchContext) never switches to the readied consumer.
-§9b works precisely because its task-path give does an immediate ready + yield. The give targets the RIGHT semaphore
-(`0x20034090`, same mailbox `0x2003408c`, enqueue to `[mbox+8]`) and the consumer IS blocked there — only the wake
-propagation differs. Tried ~8 fixes (manual restore [faults — producer causes context switches that stale the saved
-ctx], natural return, mid-/post-producer forced PendSV, minimal trap, PRIMASK-atomic producer) — none close it; all
-still hit the FromISR-deferred wake. This is an **emulation/injection artifact, not firmware behavior** — on real HW the
-producer runs as `pid_motor_task` (thread ctx, no injected tick race), so the give is task-path and the consumer wakes
-naturally. The consumer half (door_unlock → autonomous wake → `sub_80714F4` → `sub_806DA24`) is proven in
-`u400-9b-inject-unlock.resc`. So the COMPLETE attack path is demonstrated across the two live-RTOS scenarios; only the
-radio transport + this wake-propagation seam are bypassed. To fully close in ONE run: (a) force the producer's give onto
-the task path (reliably suppress the tick during the give — the PRIMASK-set from a Python hook did not take here; try
-the monitor `sysbus.cpu PRIMASK 1` path or masking SysTick), or (b) flush FreeRTOS `xPendingReadyList` after the give,
-or (c) run the producer as the real `pid_motor_task` rather than a console-task hijack.
+**Seam (not yet closed in ONE run) — several theories tried and DISPROVEN (2026-07-24); cause still unpinned.** The
+single-run hand-off to the consumer does not fire. What is EMPIRICALLY ESTABLISHED (don't re-chase these):
+- The producer's pid_motor publish gives the RIGHT semaphore: `0x20034090`, same mailbox `0x2003408c` the consumer
+  waits on. Verified.
+- The give runs in THREAD context via `sub_80111d0` (NOTE: earlier notes mislabeled the give fns — `sub_80111d0` is the
+  thread give taken when `sub_80e2cb4`/xPortIsInsideInterrupt==0; `sub_8011554` is the ISR give. §9b and §9c-B BOTH use
+  `sub_80111d0`, so the give path is NOT the difference — the "FromISR" theory was wrong).
+- The give **does unblock a waiter**: `sub_80cf0ca` (unblock-waiter inside the give) fires, no configASSERT trips. So
+  the consumer IS moved off the semaphore wait-list.
+- The scheduler is **NOT suspended**: `uxSchedulerSuspended` (`*0x200017d4`; inc by `sub_801d60c`=vTaskSuspendAll, dec
+  by `sub_801d628`=xTaskResumeAll→`sub_80d5fb2`) reads 0 at producer-entry, at the give, and post-publish.
+- PendSV **is** firing post-injection (scheduler alive; hooking `0x08006430` floods).
+Yet the prio-31 consumer is never selected — while §9b's short DIRECT publish (identical give, same semaphore) DOES wake
+it. So the remaining suspect is the ready-list / TCB state: after the producer path, `sub_80cf0ca` may unblock a
+different/again-blocked waiter, or the consumer isn't landing on the ready list at prio 31, or `pxCurrentTCB`/ready-list
+bookkeeping is off. Tried ~9 fixes (manual restore [faults @0x80d4904 — producer causes real context switches that stale
+the saved ctx], natural return, mid-/post-producer forced PendSV, minimal trap, PRIMASK-atomic producer via
+SetRegister(28)) — none close it. **This is an emulation/injection artifact, not firmware behavior** — on real HW the
+producer runs as `pid_motor_task` (its own thread ctx), so the wake propagates naturally. The consumer half
+(door_unlock → autonomous wake → `sub_80714F4` → `sub_806DA24`) is proven in `u400-9b-inject-unlock.resc`, so the
+COMPLETE attack path is demonstrated across the two live-RTOS scenarios; only the radio transport + this wake-propagation
+seam are bypassed. To close in ONE run needs step-by-step FreeRTOS ready-list/TCB debugging (which task `sub_80cf0ca`
+unblocks; is the consumer TCB on `pxReadyTasksLists[31]` after; does vTaskSwitchContext pick it) — OR run the producer
+as the real `pid_motor_task` (inject a command into its input queue) instead of a console-task hijack (option c).
 
 ---
 
