@@ -296,12 +296,14 @@ How it was made to work (each point was a real obstacle — see the scenario hea
 **Remaining upside (optional):** finish the BURTC-path boot (fix the `0x80d4904` hang + any further walls) to get a
 fully-idle healthy system; or the §9c radio path. Neither is needed for the §9b result above.
 
-### 9a. r0-refinement (direct-drive)  ← cheap, strengthens the primitive writeup
-Because `r0 = node` and we own the node contents, forge `D_B` so it ALSO satisfies the arg1 handle that
-`sub_80c0e78`/`sub_80c122c` dereference (@0x0807228A/0x0807229A). First enumerate which fields off arg1 those two read,
-then craft `D_B` to serve double duty (dispatch fields + handle fields — the 0x3c descriptor has spare bytes). Verify the
-full producer tail runs clean in `aliro_e2e_chain.resc`. Upgrades the primitive from "strong A/B, partial C" to
-"demonstrated C (emulation)".
+### 9a. r0-refinement (direct-drive)  ← RESOLVED: the r0-gap is BENIGN (2026-07-24)
+Because `r0 = node` and we own the node contents, the concern was that the producer's post-publish derefs
+`sub_80c0e78`/`sub_80c122c` (@0x0807228A/0x0807229A) would FAULT on a forged r0. **Verified they DON'T:** `sub_80c0e78`
+asserts only `r0 != 0` (our forged r0 is non-null → passes), then `sub_8124f7a(r0, task-registry)` looks r0 up as a task
+handle; a forged handle simply **misses the lookup → the timer branch is skipped → returns 0, no fault**. The only
+casualty is the ~60 s auto-relock timer not being armed — which for an attacker is *desirable*. So the producer runs to
+a clean publish regardless of r0. **This upgrades the primitive to demonstrated C (emulation): controlled `blx` target +
+controlled `r1` + the producer completes.** No `D_B` double-duty crafting needed.
 
 ### 9c-A. Radio-model dev → real emulated BLE  ← big, uncertain (NOT pursued; see 9c-B instead)
 Author the RAC/SYNTH/MODEM bring-up + RF-cal in `SiLabs_xG24_LPW.cs` (§7). Investigation (2026-07-23) reframed this:
@@ -380,3 +382,25 @@ Boot bypass:radio-PA 0x808105c · NVM/HAL 0x80e3e46/e48/e56/e58/e86/e88/e96/e98/
    this by injecting at the mbus layer, but it's still emulation, not the HW unit.
 
 → **No available method proves physical lock/unlock on this device.** DoS is the finding. Everything else is research.
+
+### 11b. WHY the real device only shows DoS, never the unlock (2026-07-24 analysis)
+Emulation on the **deterministic boot-heap overlay** now cleanly separates the two:
+- **The control-flow-hijack primitive is COMPLETE and correct.** `aliro_e2e_fidelity.resc`: the *actual PoC overflow
+  bytes* → the REAL `memcpy` (`sub_805e7b0`) → correctly reconstruct `D_B` → the REAL dispatch (`sub_801d96c`) → `blx`
+  into producer `sub_8072174` with the forged unlock command — no crash, no trap. Plus the r0-gap is benign (§9a). So
+  overflow→hijack→producer→publish `door_unlock` is architecturally sound.
+- **The barrier to real HW is blind heap-groom PRECISION, not the primitive.** The hijack needs the exact heap state:
+  `D_A/B1/D_B` at the right adjacency AND a byte-perfect reconstructed allocator chunk header
+  (`CHUNK 01 00 08 00 09 00 09 00`). Emulation supplies all of this perfectly (fixed addresses, no ASLR, exact bytes).
+  On the real device you groom the heap **blind** (SWD fused → no heap visibility; OTA → allocation timing/state
+  non-deterministic). If the groom/header is off, the overflow corrupts the wrong metadata and a later allocator walk
+  faults → watchdog reset = **the DoS you observe**; the narrow "everything byte-perfect" path that yields the hijack is
+  what you almost never hit blind.
+- **Reliability here is STATISTICAL, not a single threshold.** A one-bit chunk-header perturbation + a follow-on
+  `malloc` did NOT crash (`probe_perturb`): whether corruption is fatal depends on *which* allocator op later walks the
+  region. So "how triggerable is it?" is a distribution to be **measured**, not a yes/no — the right tool is fuzzing
+  (`matter/aliro-u400/fuzzware/` is set up: `config.yml`, `firmware/U400.bin`, `seeds/`, `uprobe.py`) to characterize the
+  crash-vs-hijack rate across input + heap states. Hand-crafted scenarios can't produce that distribution.
+→ Bottom line: emulation shows the exploit is **possible** (primitive complete) but the real-HW outcome is
+**crash-dominated** because a black-box device can't be groomed with the required byte precision. The next analytical
+step (if pursued) is fuzzing for the reliability distribution, not more hand-stitched single runs.
