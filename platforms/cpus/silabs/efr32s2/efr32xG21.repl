@@ -152,6 +152,7 @@ radio: Wireless.SiLabs_xG22_LPW @ {
     sequencer: seqcpu
     bufferController: lpwBufferController
     prortc: prortc
+    clockFrequency: 38400000
     // Main CPU interrupts
     AutomaticGainControlIRQ -> nvic@31
     FrameControllerPrioritizedIRQ -> nvic@33
@@ -269,6 +270,7 @@ ldma: DMA.SiLabs_LDMA_0_1 @ {
         sysbus new Bus.BusMultiRegistration { address: 0x40044000; size: 0x4000; region: "ldmaxbar" }; // LDMAXBAR_S
         sysbus new Bus.BusMultiRegistration { address: 0x50044000; size: 0x4000; region: "ldmaxbar" }  // LDMAXBAR_NS
     }
+    context: cpu
     -> nvic@21
 
 wtimer0: Timers.EFR32_Timer @ {
