@@ -1,26 +1,31 @@
+// BRD2601B / xG24-DK2601B — EFR32MG24B310F1536IM48 Dev Kit
+// RGB LED (active low): R=PD02, G=PA04, B=PB00
+// Push buttons (active low): BTN0=PB02, BTN1=PB03
 using "platforms/cpus/silabs/efr32s2/efr32xG24.repl"
 
-led0: Miscellaneous.LED @ gpioPort 18  // PB02
-
-led1: Miscellaneous.LED @ gpioPort 20  // PB04
+led0: Miscellaneous.LED @ gpioPort 4   // PA04 - green
+led1: Miscellaneous.LED @ gpioPort 16  // PB00 - blue
+led2: Miscellaneous.LED @ gpioPort 50  // PD02 - red
 
 gpioPort:
-    18 -> led0@0
-    20 -> led1@0
+    4 -> led0@0
+    16 -> led1@0
+    50 -> led2@0
 
-button0: Miscellaneous.Button @ gpioPort 17  // PB01
-    -> gpioPort@17
+button0: Miscellaneous.Button @ gpioPort 18  // PB02
+    -> gpioPort@18
 
 button1: Miscellaneous.Button @ gpioPort 19  // PB03
     -> gpioPort@19
 
 deviceInformation:
-    deviceNumber: 1210
+    deviceNumber: 1310
 
 radio:
     pa0DbmSupport: true
     pa10DbmSupport: true
     pa20DbmSupport: false
+    clockFrequency: 39000000
 
 sram:
     size: 0x40000
@@ -41,9 +46,6 @@ msc:
 
 nvic:
     systickFrequency: 39000000
-
-radio:
-    clockFrequency: 39000000
 
 usart0:
     clockFrequency: 39000000
