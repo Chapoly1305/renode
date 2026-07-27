@@ -12,7 +12,7 @@ set -u
 exec >/tmp/e2e_flip.log 2>&1
 mount -t tmpfs tmpfs /run 2>/dev/null
 
-R=/home/chen/aliro-renode
+R="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 REPO_OT=/home/chen/matter-renode-work/connectedhomeip/third_party/ot-br-posix/repo
 OT_RCP=$REPO_OT/third_party/openthread/repo/build/simulation/examples/apps/ncp/ot-rcp
 OTBR_AGENT=$REPO_OT/build/otbr/src/agent/otbr-agent
