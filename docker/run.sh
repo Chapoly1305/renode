@@ -30,32 +30,33 @@ MOUNTS=(
 )
 
 if [[ "${1:-}" == "otbr" ]]; then
-    # otbr-based flows (e2e_diag_inner.sh / e2e_normal_inner.sh / e2e_flip_inner.sh) need their
-    # own net+user namespace (dummy iface, IPv6 forwarding, private dbus, a wpan0 tun device, and
-    # otbr-agent's /run/openthread-*.sock+.lock daemon socket). Empirically verified minimal grant
-    # -- no --privileged, no apparmor override:
-    #   --cap-add SYS_ADMIN        unshare(CLONE_NEWUSER|CLONE_NEWNET) is seccomp-gated on this cap
-    #   --device /dev/net/tun      otbr-agent creates the wpan0 TUN interface
-    #   --tmpfs /run:rw,mode=1777  OPENTHREAD_POSIX_CONFIG_DAEMON_SOCKET_BASENAME is hardcoded to
-    #                              /run/openthread-%s at compile time (daemon.cpp); real container
-    #                              /run is root-owned+non-writable to our mapped-root (mapping is
-    #                              fake outside the nested userns), so give it a writable tmpfs the
-    #                              same way docker already does for /tmp.
-    # Dropping --mount from the unshare (vs. the scripts' own `unshare --user --net --mount`) avoids
-    # needing an AppArmor override: the scripts' `mount -t tmpfs tmpfs /run` line is already
-    # best-effort (`2>/dev/null`) and becomes a harmless no-op once /run is a writable tmpfs anyway.
-    # Renode + otbr-agent + chip-tool all end up co-located inside the SAME unshared net namespace
-    # (the script starts all three), so --network host at the docker level is irrelevant here and
-    # is deliberately omitted -- the inner unshare re-isolates networking regardless.
+    # otbr-based flows (e2e_diag_inner.sh / e2e_normal_inner.sh / e2e_flip_inner.sh) need real
+    # kernel network-interface operations (a dummy "infra0" iface, IPv6 forwarding, a wpan0 TUN
+    # device for otbr-agent) plus a writable /run for its daemon socket. Docker's own per-container
+    # network namespace is already the isolation these scripts assume (their header comment
+    # documents running under a manual `unshare --user --net --mount`) -- that manual unshare is
+    # redundant inside a container and was dropped entirely, which also drops the two grants it
+    # required (--cap-add SYS_ADMIN for the unshare(CLONE_NEWUSER) seccomp gate, and a --tmpfs /run
+    # workaround for the nested-userns "fake root" not being able to write the real /run). Running
+    # directly as the container's own root sidesteps both: real root can write /run directly, so
+    # only two grants remain, and NET_ADMIN is the narrowly-scoped capability for what this
+    # actually needs (vs. SYS_ADMIN, a much broader one):
+    #   --cap-add NET_ADMIN     create/configure the dummy iface, IPv6 forwarding, wpan0 tun
+    #   --device /dev/net/tun   otbr-agent's TUN interface (also absent from /dev by default)
+    # Confirmed floor: with zero grants, even as root, `ip link add` fails with "Operation not
+    # permitted" and /dev/net/tun doesn't exist -- Docker withholds both specifically as a security
+    # boundary, independent of UID. Real interface/TUN creation is inherently privileged; going
+    # below these two would mean not using genuine otbr-agent/kernel networking at all (stubbing
+    # the border-router logic in pure userspace), which stops testing the real code path.
     shift
     SCRIPT="${1:-e2e_diag_inner.sh}"
     docker run --rm "${TTY_FLAGS[@]}" \
-        --cap-add SYS_ADMIN \
+        --user root \
+        --cap-add NET_ADMIN \
         --device /dev/net/tun \
-        --tmpfs /run:rw,mode=1777 \
         "${MOUNTS[@]}" \
         "$IMAGE" \
-        bash -lc "cd /home/chen/renode-matter-groundtruth && unshare --user --map-root-user --net --fork -- bash matter/renode-thread/scripts/$SCRIPT"
+        bash -lc "export HOME=/home/chen && cd /home/chen/renode-matter-groundtruth && bash matter/renode-thread/scripts/$SCRIPT"
     exit 0
 fi
 
