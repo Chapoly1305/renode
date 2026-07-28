@@ -36,6 +36,10 @@ behave identically to running directly on the host. Verified full pass:
 BLE PASE → NOC → Thread Network Setup/Enable → device attaches to Thread.
 Stops at `FindOperationalForStayActive` by design — that stage needs otbr.
 
+Re-verified 2026-07-27: BLE PASE → NOC → ThreadNetworkSetup/Enable all succeeded,
+device attached to Thread (leader's neighbor/router table shows it), then
+`FindOperationalForStayActive` timed out as expected (no otbr in this flow).
+
 ## otbr flow (`e2e_diag_inner.sh` / `e2e_normal_inner.sh` / `e2e_flip_inner.sh`)
 
 These need real kernel network-interface operations: a dummy `infra0`
@@ -53,6 +57,12 @@ verified end-to-end under this exact recipe: BLE PASE → NOC → Thread
 commissioning → device self-partitions to leader → otbr merges as router+BR
 → device registers its Matter SRP service → **operational CASE established
 → cluster command InvokeResponse SUCCESS**.
+
+Re-verified 2026-07-27 under the current `--user root --cap-add NET_ADMIN
+--device /dev/net/tun` recipe: otbr merged as router (`partition=1172417620`),
+published OMR `fd0d:b0b0:cafe:1::/64`, device SLAAC'd it and registered its
+`_matter` SRP service (`srp_svc=1 srp_host=2`), and the final cluster command
+came back `InvokeResponseMessage ... status = 0x00 (SUCCESS)`.
 
 ### Who actually asks for `NET_ADMIN` / `/dev/net/tun`, and why
 
