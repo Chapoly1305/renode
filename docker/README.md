@@ -1,4 +1,4 @@
-# Containerized stock-ground-truth commissioning env
+# Containerized commissioning env (matter-emulated-commissioning)
 
 Runs the Renode + Matter BLE/Thread commissioning proof in a Linux Docker container.
 Motivated by otbr/Docker not working on macOS: otbr needs Linux-native netlink,
