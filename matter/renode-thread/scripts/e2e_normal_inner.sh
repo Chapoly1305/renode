@@ -223,6 +223,23 @@ if [ "$commissioned" = 1 ]; then
   echo "### 6) operational cluster command: onoff toggle (endpoint 1) over UDP-over-Thread"
   CHIP_FAKE_BLE_PORT=3500 timeout 60 "$CHIP" onoff toggle 1 1 > "$CLOG" 2>&1
   echo "    onoff toggle exit=$?"
+
+  # Extra operational commands, one per line in EXTRA_CHIP_CMDS. They run here,
+  # inside the commissioned window, because by the time this script returns the
+  # `timeout 900` around Renode may already have fired -- appending them after the
+  # script is a race. An Invoke succeeding does not imply a Read will: different
+  # IM interaction, different endpoint, and attribute paths go through their own
+  # expansion and ACL check. So a Read has to be exercised here to count.
+  if [ -n "${EXTRA_CHIP_CMDS:-}" ]; then
+    XLOG=/tmp/cluster-extra.log; : > "$XLOG"
+    echo "### 6b) extra operational commands"
+    while IFS= read -r cmd; do
+      [ -z "$cmd" ] && continue
+      echo "    ---- chip-tool $cmd ----" | tee -a "$XLOG"
+      CHIP_FAKE_BLE_PORT=3500 timeout 60 "$CHIP" $cmd >> "$XLOG" 2>&1
+      echo "    exit=$?" | tee -a "$XLOG"
+    done <<< "$EXTRA_CHIP_CMDS"
+  fi
 fi
 
 echo "### 7) post-commission observation (otbr partition/SRP) up to 6 min or until SRP registers"
@@ -246,5 +263,8 @@ echo "---- otbr netdata (OMR + SRP service present?) ----"; "$OT_CTL" netdata sh
 echo "---- otbr SRP hosts ----"; "$OT_CTL" srp server host 2>/dev/null
 echo "---- otbr SRP services ----"; "$OT_CTL" srp server service 2>/dev/null
 echo "---- cluster cmd ----"; grep -iE "onoff|success|Timeout|Error|response" "$CLOG" 2>/dev/null | tail -6
+if [ -s /tmp/cluster-extra.log ]; then
+  echo "---- extra cluster cmds (EXTRA_CHIP_CMDS) ----"; cat /tmp/cluster-extra.log
+fi
 echo "---- flip-live timeline (last 30) ----"; tail -30 "$LIVE" 2>/dev/null
 echo "### flip e2e done"
