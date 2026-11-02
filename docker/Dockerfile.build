@@ -1,0 +1,7 @@
+FROM mcr.microsoft.com/dotnet/sdk:8.0-noble@sha256:42eb9e70b190d0cca893d93724e67fb89e7570e4309c4b1c20b7f6016a90202d
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake ninja-build git python3 python3-venv pkg-config \
+    autoconf automake libtool binutils-dev libgtk-3-0t64 \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /work
+CMD ["./build.sh", "--skip-fetch"]

@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-02",
+  "baseline": "61d8ed595292a62ada82a89db39c19bfe04e3f44",
+  "old_branch": "matter-emulated-commissioning",
+  "old_tip": "9d2707317030cd739f467f472bfe805a391265db",
+  "branch": "integration/stock-ble-on-silabs-26q3",
+  "status": "CANDIDATE_PENDING_REGRESSION",
+  "method": "Rebase the 21 commits after Silicon Labs 26q1 onto 26q3; resolve every historical Infrastructure bump to the separately ported candidate rather than reinstalling old model commits.",
+  "infrastructure": "17d02f48",
+  "tlib": "43a51de2aa1b05fdfd2073681b9b027af555422c",
+  "resources_for_validation": "9d7824771f3db67663950cae06f5bb7f89fbf33b",
+  "retained": ["stock firmware BLE/Thread host bridges", "BRD2601B board", "commissioning and operational Invoke/Read harnesses", "historical Docker runtime recipe and its documented permission floor", "diagnostic scenarios, retained explicitly as diagnostics"],
+  "upstream_retained": ["26q3 platform and peripheral updates", "NativeInterface DNNE submodule", "26q3 test_lib and peripheral test suites", "new SecureElement implementation rather than old hand-rolled crypto state"],
+  "build": {"command": "./build.sh --skip-fetch", "container": "local/renode-build:silabs-26q3", "dockerfile": "docker/Dockerfile.build", "status": "PASSED", "errors": 0, "warnings": ["Existing unused connectIndScheduled field in BleCentralBridge"]},
+  "validation": {"SYMCRYPTO_1.py": {"passed": 14}, "secure_engine_commands.py": {"passed": 30, "note": "Exercises upstream SEMAILBOX_2, not the custom SEMAILBOX_1 TXINT change"}, "PROTIMER.robot": {"model": "xg24", "passed": 5, "results": "output/tests/robot_output.xml"}, "SYSRTC_1_rebase.robot": {"passed": 2, "coverage": ["future comparator wins over past comparator", "counter wrap"], "results": "output/sysrtc-rebase/robot_output.xml"}, "stock_bridge_smoke.py": {"status": "PASSED", "scope": "board, both bridges, medium load and reset only"}},
+  "wireless_api_port": "BLE emits an explicit LE 1M PHY signature; 802.15.4 learns the transmitting device's OQPSK/DSSS signature; completed transmissions retain upstream metadata until the next TX",
+  "commit_map": "SILABS_COMMIT_MAP.json",
+  "validation_plan": ["compile all CPU backends and C# models", "SYMCRYPTO known-answer vectors", "Secure Engine command vectors", "PROTIMER and SYSRTC regression", "BRD2601B and bridge instantiation", "uninstrumented firmware commissioning and Invoke/Read controls"],
+  "limits": ["Old Docker runtime-only script still depends on hardcoded /home/chen paths and separately built chip-tool/otbr", "Local mw-emu overlays are not automatically imported", "Do not replace the existing runtime until stock firmware controls pass"]
+}

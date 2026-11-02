@@ -25,7 +25,6 @@ radio:
     pa0DbmSupport: true
     pa10DbmSupport: true
     pa20DbmSupport: false
-    clockFrequency: 39000000
 
 sram:
     size: 0x40000
@@ -47,23 +46,7 @@ msc:
 nvic:
     systickFrequency: 39000000
 
-usart0:
-    clockFrequency: 39000000
-
-eusart0:
-    clockFrequency: 39000000
-
-eusart1:
-    clockFrequency: 39000000
-
-timer0:
-    frequency: 39000000
-
-timer1:
-    frequency: 39000000
-
-wtimer0:
-    frequency: 39000000
-
-wtimer1:
-    frequency: 39000000
+// 26q3 peripheral models obtain their clock from the CMU. The former per-device
+// constructor parameters no longer exist on EUSART/radio/timer models.
+cmu:
+    hfxoFrequency: 39000000

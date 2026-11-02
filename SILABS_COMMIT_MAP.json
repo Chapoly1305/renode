@@ -1,0 +1,149 @@
+[
+  {
+    "commit": "96de7b2cb170d6f93f1e825833cf746eadf6fab9",
+    "subject": "[renode-matter] Thread operational handoff: bridges + scenarios + docs",
+    "rebased_commit": "b7db59740dbd6c502ad4d21f01fcda310e7d0d09",
+    "decision": "REPLAY",
+    "scope": "Candidate feature or harness"
+  },
+  {
+    "commit": "03e48eebf96d6d20e06768f538e612adb1288bf7",
+    "subject": "renode-matter: native-Linux E2E driver + bump bridge (Thread attach works)",
+    "rebased_commit": "48f0316a01f46449897d96d325ef7861f1c8a19c",
+    "decision": "RETAIN_ADAPTED_GITLINK",
+    "scope": "Historical recipe or diagnostic; not proof of validated commissioning"
+  },
+  {
+    "commit": "72711e136a67e1590617fc96094e5fb73411a148",
+    "subject": "renode-matter: add ping_test.sh (verify IP-over-Thread datapath)",
+    "rebased_commit": "a18b373e9744c368d09274d58c65bc5d8fa236ba",
+    "decision": "REPLAY",
+    "scope": "Candidate feature or harness"
+  },
+  {
+    "commit": "e85bfbc45056a0831143d65b694a54a800794fde",
+    "subject": "ping_test.sh: robust child-RLOC parsing + SCENARIO override",
+    "rebased_commit": "45d0d34cd281fa83bdca50568e1b6e15945f1800",
+    "decision": "REPLAY",
+    "scope": "Candidate feature or harness"
+  },
+  {
+    "commit": "17dec9dd0304367771710bf2b20c3e117fc56ae2",
+    "subject": "renode-matter: keep air sniffers as diagnostics; drop dead-end q10us scenario",
+    "rebased_commit": "d8a08fbd95284c15394836e99f6d4ec4c78fb047",
+    "decision": "REPLAY",
+    "scope": "Historical recipe or diagnostic; not proof of validated commissioning"
+  },
+  {
+    "commit": "55467d672dcd618a7dfd814848d37a8fe26f7ad1",
+    "subject": "Renode: bump Infrastructure (EM1P + 15.4 bridge); add brd2601b platform + RTT drain tooling",
+    "rebased_commit": "d4d9ac08c8deac61d2a6a776a4cca45df46a3ff2",
+    "decision": "RETAIN_ADAPTED_GITLINK",
+    "scope": "Candidate feature or harness"
+  },
+  {
+    "commit": "da43d39fa104745396cc4c39dc608d1d69a74fb9",
+    "subject": "Renode E2E: operational commissioning harnesses (flip topology) + perf tuning + air sniffer",
+    "rebased_commit": "c59373b73bad3d5af3cfbf76dd974c89f3666306",
+    "decision": "REPLAY",
+    "scope": "Historical recipe or diagnostic; not proof of validated commissioning"
+  },
+  {
+    "commit": "124cf754bd752dadf8a34dc5ce7735ec00aab095",
+    "subject": "E2E: normal-topology operational Thread harness + diagnostic scenarios",
+    "rebased_commit": "318a381e709ddccbc42c5f51f6cc3a15ba037e45",
+    "decision": "REPLAY",
+    "scope": "Historical recipe or diagnostic; not proof of validated commissioning"
+  },
+  {
+    "commit": "0a7e7a5423e75462878b295f35146571da39d90b",
+    "subject": "Consolidate U400/Aliro Renode work onto 26q1 base (content port from 25q4 silabs-vuln; firmware git-ignored)",
+    "rebased_commit": "db6c2ba5ace265c7ac02911fdaa09a52ae430aba",
+    "decision": "REPLAY",
+    "scope": "Historical recipe or diagnostic; not proof of validated commissioning"
+  },
+  {
+    "commit": "07b12a9de60ea21684953bbaedeeedfd265ba207",
+    "subject": "Fix self-referential paths after rename to ~/aliro-renode (overlay->relative, scenarios/e2e->new path); single consolidated Aliro Renode env",
+    "rebased_commit": "25dc1380de2a22d4bd62f2f1bf142a99bf71bb4d",
+    "decision": "REPLAY",
+    "scope": "Historical recipe or diagnostic; not proof of validated commissioning"
+  },
+  {
+    "commit": "bf4fb90ca45d87311fa030b7f976b3ef2fcb4872",
+    "subject": "e2e_native.sh: guard against stray Renode / busy port 3500 before boot",
+    "rebased_commit": "37e3695cc2ba3d585f06740c4f928acb42778913",
+    "decision": "REPLAY",
+    "scope": "Historical recipe or diagnostic; not proof of validated commissioning"
+  },
+  {
+    "commit": "055823988c1dd511a05c1167114eeedb1bc52ea1",
+    "subject": "Stock ground-truth exec env: drop U400 experiment + retired content",
+    "rebased_commit": "6965c94a23cd0a537b7d0891669a3b429a501428",
+    "decision": "REPLAY",
+    "scope": "Historical recipe or diagnostic; not proof of validated commissioning"
+  },
+  {
+    "commit": "63270d8bf7ba89bc15c20523562110e7a54454cd",
+    "subject": "feat: add BRD2601B (xG24-DK2601B, EFR32MG24B310) Dev Kit board",
+    "rebased_commit": "da3e470bbb115baad16f64b892825f83d464aa22",
+    "decision": "REPLAY",
+    "scope": "Candidate feature or harness"
+  },
+  {
+    "commit": "64d40a3c5561a5fb06c88308b0d005a3fe7c87d1",
+    "subject": "e2e scripts: derive repo root from script location instead of hardcoded ~/aliro-renode",
+    "rebased_commit": "658ac90b9ed51762bc1519fa4a279cff9b0bc5c0",
+    "decision": "REPLAY",
+    "scope": "Historical recipe or diagnostic; not proof of validated commissioning"
+  },
+  {
+    "commit": "9a26d7bc5bcfa80f357c387aea65c459cdc36ccb",
+    "subject": "Add connectedhomeip (fake-ble-transport) as a submodule, pinned to the commissioning-proof commit",
+    "rebased_commit": "2acadd33bc7f8e790ed6c410634ae648ee21c952",
+    "decision": "REPLAY",
+    "scope": "Historical recipe or diagnostic; not proof of validated commissioning"
+  },
+  {
+    "commit": "454dbe5ea3b89a41ce916714dd49c7959ac04c27",
+    "subject": "docker: containerize both native and otbr commissioning flows on Linux",
+    "rebased_commit": "982387b930704df840620ac9e060b4bab78e129d",
+    "decision": "REPLAY",
+    "scope": "Historical recipe or diagnostic; not proof of validated commissioning"
+  },
+  {
+    "commit": "be141f1693303033468513972915868e22116381",
+    "subject": "docker: drop nested unshare for otbr flow, minimal grant is now NET_ADMIN+tun",
+    "rebased_commit": "6c5975c39f8e720019dbb5c10bd3459fc52f29d9",
+    "decision": "REPLAY",
+    "scope": "Historical recipe or diagnostic; not proof of validated commissioning"
+  },
+  {
+    "commit": "78d029798cc961edeed50d0018abc91f7dedd0ed",
+    "subject": "docker: add README documenting usage and the otbr permission floor",
+    "rebased_commit": "fb267c351db33701d08c27c72345989c018e2d3e",
+    "decision": "REPLAY",
+    "scope": "Historical recipe or diagnostic; not proof of validated commissioning"
+  },
+  {
+    "commit": "39a965ca54097b7b86f25da329f4ea0f83ea2098",
+    "subject": "docker: record 2026-07-27 re-verification of both flows",
+    "rebased_commit": "a16797cda51591f51088e545cb3629f3d79513e7",
+    "decision": "REPLAY",
+    "scope": "Historical recipe or diagnostic; not proof of validated commissioning"
+  },
+  {
+    "commit": "e79e889ef4eeae0cb52683bdbc8729d60534f0c4",
+    "subject": "rename branch stock-ground-truth -> matter-emulated-commissioning",
+    "rebased_commit": "7b1d3c5c2f13b97ca840d6a40285413a7dcfdd7d",
+    "decision": "REPLAY",
+    "scope": "Historical recipe or diagnostic; not proof of validated commissioning"
+  },
+  {
+    "commit": "9d2707317030cd739f467f472bfe805a391265db",
+    "subject": "e2e_normal: run extra operational chip-tool commands from EXTRA_CHIP_CMDS",
+    "rebased_commit": "8e53e4082e0f4ace20c8670b56c2a5b4b594644b",
+    "decision": "REPLAY",
+    "scope": "Historical recipe or diagnostic; not proof of validated commissioning"
+  }
+]
