@@ -1,0 +1,139 @@
+{
+  "date": "2026-11-02",
+  "status": "FIRMWARE_GATE_FAILED_DO_NOT_PROMOTE",
+  "tested_source": {
+    "renode": "f155b1ce952c578c3e9ad3fc415d7a07b151cf58",
+    "infrastructure": "17d02f48b50def5895dcd3f09ed6304a563209d8"
+  },
+  "image": "sha256:1552acd783900300c17c73880fc8e56bf88cd9ad362bb553ae9ed6f27d2acc80",
+  "binary_sha256": {
+    "Renode.dll": "eb04e967a2be1a098b7ce198cb0038b9f200804b2db26b4f57836788e3daaa45",
+    "Infrastructure.dll": "d090f4c4c9a564d93d5310de587f1ff0fc018c5664a2d221175a97f52cf7b0e5"
+  },
+  "components": {
+    "symcrypto": {
+      "exit_code": 0,
+      "elapsed_seconds": 8.55,
+      "log": "output/rebase-regression/components/symcrypto.log",
+      "passed": 14
+    },
+    "secure-engine": {
+      "exit_code": 0,
+      "elapsed_seconds": 16.08,
+      "log": "output/rebase-regression/components/secure-engine.log",
+      "passed": 30
+    },
+    "bridges": {
+      "exit_code": 0,
+      "elapsed_seconds": 7.48,
+      "log": "output/rebase-regression/components/bridges.log",
+      "passed": 10
+    },
+    "board-smoke": {
+      "exit_code": 0,
+      "elapsed_seconds": 8.91,
+      "log": "output/rebase-regression/components/board-smoke.log"
+    },
+    "robot": {
+      "exit_code": 0,
+      "elapsed_seconds": 7.96,
+      "log": "output/rebase-regression/components/robot.log",
+      "passed": 12
+    }
+  },
+  "checks_passed_excluding_board_smoke": 66,
+  "boot_comparison": {
+    "ltech": [
+      {
+        "runtime": "runtime-control",
+        "root": "/home/jchen73/mw-emu/renode",
+        "status": "PASS",
+        "elapsed_seconds": 8.88,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/Ltech/5535/5535_45058_257592_32d68b99c7cd.elf",
+        "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+        "board": "brd2601b",
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning"
+      },
+      {
+        "runtime": "candidate",
+        "root": "/home/jchen73/renode-integration",
+        "status": "TIMEOUT",
+        "elapsed_seconds": 70.0,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/Ltech/5535/5535_45058_257592_32d68b99c7cd.elf",
+        "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+        "board": "brd2601b",
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning"
+      }
+    ],
+    "lg": [
+      {
+        "runtime": "runtime-control",
+        "root": "/home/jchen73/mw-emu/renode",
+        "status": "TIMEOUT",
+        "elapsed_seconds": 70.25,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/LG_Electronics/4142/4142_8704_1507958_01f75e20b25b.elf",
+        "elf_sha256": "9736771a0e3a15fb01804d6435854379374c704a67ceb9e1e518b045c725e24f",
+        "board": "brd2601b",
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning"
+      },
+      {
+        "runtime": "candidate",
+        "root": "/home/jchen73/renode-integration",
+        "status": "TIMEOUT",
+        "elapsed_seconds": 70.24,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/LG_Electronics/4142/4142_8704_1507958_01f75e20b25b.elf",
+        "elf_sha256": "9736771a0e3a15fb01804d6435854379374c704a67ceb9e1e518b045c725e24f",
+        "board": "brd2601b",
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning"
+      }
+    ]
+  },
+  "diagnostic_observation": {
+    "sequencer_PC": "0x2B84",
+    "M33_PRIMASK": 1,
+    "sequencer_PRIMASK": 1,
+    "HOSTMAILBOX_IF": 1,
+    "HOSTMAILBOX_IEN": 3,
+    "RFMAILBOX_IF": 1,
+    "RFMAILBOX_IEN": 3,
+    "scope": "Read-only register/PC snapshots in a separate diagnostic emulation at virtual 0.1s and 0.6s; not a boot measurement"
+  },
+  "interpretation": {
+    "ltech": "Candidate fails the existing runtime GATT readiness control. Firmware is identical and uninstrumented in both runs.",
+    "control_limitation": "Existing runtime is not a build of the unmodified old GitHub branch. Its boot log explicitly shows HOSTMAILBOX doorbell deadlock acknowledgement; the local compensation is outside the rebased six commits.",
+    "causality_limit": "Missing local compensation explains the observed stalled handshake; importing it and retesting was not performed, so it is not established as the only blocker. No claim that upstream 26q3 introduced this behavior.",
+    "lg": "If both runtimes time out this is an inconclusive negative control, not evidence of a new regression.",
+    "fidelity_limit": "Board mapping is inherited from the corpus and not independently confirmed; synthetic ACKs and model-side compensation do not prove hardware timing fidelity."
+  },
+  "not_run": [
+    "Full PASE/commissioning/Thread/CASE/Invoke/Read: candidate fails earlier GATT boot gate; matching fake-BLE chip-tool and OTBR artifacts unavailable",
+    "Unmodified original-fork source baseline build",
+    "Active-traffic reset and shadow-register fidelity audit"
+  ],
+  "reproduce": {
+    "components": "Run the logged Python files with RENODE_BASE_PATH=/work PYRENODE_PATH=/work PYRENODE_RUNTIME=coreclr in the SDK image. For Robot use ./renode-test --variable LPW_MODEL:xg24 with PROTIMER.robot, SYSRTC_1_rebase.robot and SEMAILBOX_1_rebase.robot.",
+    "firmware": "python3 tests/peripherals/SiLabs/stock_boot_regression.py --runtime runtime-control=/path/to/existing/renode --runtime candidate=/path/to/renode-integration --elf /path/to/actual.elf --output output/rebase-regression/sample",
+    "inputs": "Ltech 5535/45058 and LG 4142/8704 production corpus ELF, brd2601b, load base 0x08006000; see boot_comparison for hashes."
+  },
+  "raw_evidence": "output/rebase-regression/ (local ignored directory; no firmware copied into Git)"
+}
