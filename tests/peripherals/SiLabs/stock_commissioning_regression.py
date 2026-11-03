@@ -531,7 +531,10 @@ while True:
             handle.close()
         subprocess.run(['docker', 'network', 'rm', network], capture_output=True)
     log = read('pairing.log')
-    evidence = pairing_evidence(log)
+    # If interactive command synchronization fails, its raw log can still
+    # contain a later PASE marker. Report that observation without promoting
+    # the overall verdict or pretending attribute reads took place.
+    evidence = pairing_evidence(read('interactive.log') if args.pase_only else log)
     before = re.findall(r'OnOff: (TRUE|FALSE)', read('read_before.log'))
     after = re.findall(r'OnOff: (TRUE|FALSE)', read('read_after.log'))
     operational_verified = (applicability == 'APPLICABLE' and len(operational) == 3 and
@@ -554,6 +557,7 @@ while True:
     result = {'status': status, 'phase_results': phase_results,
               'elapsed_seconds': round(time.monotonic() - started, 2), 'pairing_returncode': pairing_code,
               'pairing_status': pairing_status, 'pairing_log_file': 'pairing.log',
+              'interactive_log_file': 'interactive.log' if args.pase_only else None,
               'elf_sha256': hashlib.sha256(elf.read_bytes()).hexdigest(), 'chip_tool_sha256': chip_sha,
               'platform': args.platform, 'overlays': args.overlay, 'docker_memory': '3g',
               **evidence,

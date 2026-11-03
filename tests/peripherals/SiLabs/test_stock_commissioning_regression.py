@@ -63,6 +63,8 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(stock.classify_status('COMMISSIONING_PASS', True, 'APPLICABLE', False), 'OPERATIONAL_FAILED')
         self.assertEqual(stock.classify_status('COMMISSIONING_PASS', False, 'APPLICABLE', True), 'ATTRIBUTE_READ_FAILED')
         self.assertEqual(stock.classify_status('PAIRING_TIMEOUT', True, 'APPLICABLE', True), 'PAIRING_TIMEOUT')
+        self.assertEqual(stock.classify_status('HARNESS_OR_BOOT_ERROR', True, 'APPLICABLE', True),
+                         'HARNESS_OR_BOOT_ERROR')
 
     def test_failure_log_or_incomplete_prompt_never_promotes_a_read(self):
         self.assertFalse(stock.command_succeeded('Run command failure: Timeout'))
