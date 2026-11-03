@@ -49,5 +49,5 @@
 	url = https://github.com/antmicro/DNNE
 [submodule "matter/connectedhomeip"]
 	path = matter/connectedhomeip
-	url = git@github.com:Chapoly1305/connectedhomeip.git
+	url = https://github.com/Chapoly1305/connectedhomeip.git
 	branch = fake-ble-transport

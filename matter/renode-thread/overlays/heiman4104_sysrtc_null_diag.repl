@@ -1,0 +1,5 @@
+// Migrated: 2026-11-02, Silicon Labs 26q3. Class C.
+// Explicit board profile; device identity and vendor commissioning are not established by a successful platform load.
+using "matter/renode-thread/overlays/brd2601b_mg24a_38m4_iadc.repl"
+sysrtc:
+    frequency: 32768

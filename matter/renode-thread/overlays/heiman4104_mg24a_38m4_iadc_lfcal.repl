@@ -1,0 +1,5 @@
+// Migrated: 2026-11-02, Silicon Labs 26q3. Class B.
+// LEGACY compensation only: SYSRTC 33280Hz is not physical and is invalid for timing/power/radio measurements. CMU crystal calibration is now fixed; prefer heiman4104_mg24a_38m4_iadc.repl. Vendor replay pending.
+using "matter/renode-thread/overlays/brd2601b_mg24a_38m4_iadc.repl"
+sysrtc:
+    frequency: 33280

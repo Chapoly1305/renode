@@ -1,0 +1,643 @@
+{
+  "date": "2026-11-02",
+  "status": "SOURCE_MIGRATION_IN_PROGRESS",
+  "infrastructure": "ff6aab394d1f38c6297896274e1737f31fbd0d2e",
+  "model_code_commit": "c1c6e4eb09036d0b272e6f7b2d777bbd8fd08251",
+  "tlib": {
+    "baseline": "43a51de2aa1b05fdfd2073681b9b027af555422c",
+    "commit": "c04d273709cfe8e604233199dc54f638210c9eb5",
+    "historical_patch": "23cafae344f4f663879e38903c78b20a3e1602d6",
+    "adaptation": "Allow only unshifted non-flag-setting MOV from SP to a general-purpose register, independent of MVE, preserving wide-shift decoding.",
+    "architecture_reference": "https://community.arm.com/cfs-file/__key/communityserver-discussions-components-files/471/DDI0553B_5F00_y_5F00_armv8m_5F00_arm.pdf",
+    "architecture_section": "DDI0553B.y C2.4.120, T3 decode",
+    "original_upstream_fixture": {
+      "cases": 2,
+      "failed": 1,
+      "log": "output/local-migration/thumb2-mov-sp.log"
+    },
+    "unconstrained_old_patch_fixture": {
+      "cases": 5,
+      "failed": 3,
+      "log": "output/local-migration/thumb2-mov-sp-boundary-before.log"
+    },
+    "reviewed_fix_fixture": {
+      "cases": 5,
+      "failed": 0,
+      "log": "output/local-migration/thumb2-mov-sp-boundary-after.log"
+    }
+  },
+  "build": {
+    "command": "./build.sh --skip-fetch",
+    "image": "local/renode-build:silabs-26q3",
+    "status": "PASS",
+    "errors": 0,
+    "warnings": 0,
+    "msbuild_elapsed_seconds": 39.75
+  },
+  "component_tests": {
+    "CMU_HFXO": {
+      "methods_passed": 3,
+      "configurations_passed": 14,
+      "baseline_subcase_failures": 8,
+      "scope": "CMU3/7 HFXO up/down calibration at 38.4/39/40MHz and saturation"
+    },
+    "I2C_series2": {
+      "passed": 8,
+      "baseline_cases": 7,
+      "baseline_failures": 7,
+      "scope": "aliases, selective/zero IF writes, raw pending NACKs, IRQ enable/clear and no synthetic peer ACK"
+    },
+    "EUSART2_SPI": {
+      "passed": 5,
+      "baseline_failures": 5,
+      "scope": "synchronous completion, persistent TX-ready IRQ/flag, disable and read-only status"
+    },
+    "EUSART2_RXBLOCK_control": {
+      "passed": 6
+    },
+    "pseudo_rng": {
+      "passed": 3,
+      "baseline_and_patch_blob": "a395643f069c382ab21c1f6808f0a2bf57ac8269",
+      "scope": "named CLR thread recreation, reset replay and independent streams"
+    },
+    "hostmailbox_tlib_control": {
+      "passed": 10,
+      "scope": "synthetic CPU access contexts; compensation remains opt-in",
+      "tested_tlib": "1dbdd25d44838763695f303ee4a72e956ec7e9cf",
+      "note": "Before the subsequent spec-constrained decoder refinement; final Ltech/LG firmware controls use the reviewed decoder."
+    }
+  },
+  "robot_tests": {
+    "eusart-overlay": {
+      "passed": 10,
+      "failed": 0,
+      "results": "output/local-migration/eusart-overlay/robot_output.xml"
+    },
+    "thumb2-upstream-final": {
+      "passed": 1,
+      "failed": 0,
+      "results": "output/local-migration/thumb2-upstream-final/robot_output.xml"
+    },
+    "mve-shift-final": {
+      "passed": 2,
+      "failed": 0,
+      "results": "output/local-migration/mve-shift-final/robot_output.xml"
+    }
+  },
+  "overlays": {
+    "inventoried_original_entries": 51,
+    "migrated_repl_profiles_loaded": 47,
+    "test_methods_passed": 5,
+    "clock_profiles_checked": 13,
+    "board_attribute_groups_compared": 27,
+    "board_memory_part_PA_differences": 0,
+    "I2C_family_bus_contracts": 2,
+    "BURTC_virtual_time_contracts": 2,
+    "NOR_bus_contracts": 2,
+    "manifest": "matter/renode-thread/overlays/MIGRATION.json",
+    "board_attribute_comparison": [
+      {
+        "profile": "brd2601b_38m4.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "1310",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "true",
+          "radio.pa20DbmSupport": "false",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd2601b_40m.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "1310",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "true",
+          "radio.pa20DbmSupport": "false",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd2601b_hp20.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "1310",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "false",
+          "radio.pa20DbmSupport": "true",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd2601b_hp20_38m4.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "1310",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "false",
+          "radio.pa20DbmSupport": "true",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd2601b_hp20_40m.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "1310",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "false",
+          "radio.pa20DbmSupport": "true",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd2601b_mg24a.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "10",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "true",
+          "radio.pa20DbmSupport": "false",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd2601b_mg24a_38m4.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "10",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "true",
+          "radio.pa20DbmSupport": "false",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd2601b_mg24a_38m4_iadc.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "10",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "true",
+          "radio.pa20DbmSupport": "false",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd2601b_mg24a_40m.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "10",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "true",
+          "radio.pa20DbmSupport": "false",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd2601b_mg24a_burtc.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "10",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "true",
+          "radio.pa20DbmSupport": "false",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd2601b_mg24a_burtc_38m4.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "10",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "true",
+          "radio.pa20DbmSupport": "false",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd2601b_mg24a_burtc_i2cxg2.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "10",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "true",
+          "radio.pa20DbmSupport": "false",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd2601b_mg24a_burtc_i2cxg2_38m4.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "10",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "true",
+          "radio.pa20DbmSupport": "false",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd2601b_mg24a_burtc_i2cxg2_extflash.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "10",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "true",
+          "radio.pa20DbmSupport": "false",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd2601b_mg24a_hp20.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "10",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "false",
+          "radio.pa20DbmSupport": "true",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd2601b_mg24a_hp20_38m4.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "10",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "false",
+          "radio.pa20DbmSupport": "true",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd2601b_mg24a_hp20_40m.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "10",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "false",
+          "radio.pa20DbmSupport": "true",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd2601b_mg24a_i2cxg2.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "10",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "true",
+          "radio.pa20DbmSupport": "false",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd4116a_38m4.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x320000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x80000",
+          "deviceInformation.deviceNumber": "1410",
+          "flash.size": "0x31E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "true",
+          "radio.pa20DbmSupport": "false",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd4116a_dev10.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x320000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x80000",
+          "deviceInformation.deviceNumber": "10",
+          "flash.size": "0x31E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "true",
+          "radio.pa20DbmSupport": "false",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd4117a_burtc_i2cxg2.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x320000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x80000",
+          "deviceInformation.deviceNumber": "1420",
+          "flash.size": "0x31E000",
+          "radio.pa0DbmSupport": "false",
+          "radio.pa10DbmSupport": "false",
+          "radio.pa20DbmSupport": "true",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd4117a_burtc_i2cxg2_38m4.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x320000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x80000",
+          "deviceInformation.deviceNumber": "1420",
+          "flash.size": "0x31E000",
+          "radio.pa0DbmSupport": "false",
+          "radio.pa10DbmSupport": "false",
+          "radio.pa20DbmSupport": "true",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd4117a_burtc_i2cxg2_extflash.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x320000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x80000",
+          "deviceInformation.deviceNumber": "1420",
+          "flash.size": "0x31E000",
+          "radio.pa0DbmSupport": "false",
+          "radio.pa10DbmSupport": "false",
+          "radio.pa20DbmSupport": "true",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd4117a_i2cxg2.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x320000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x80000",
+          "deviceInformation.deviceNumber": "1420",
+          "flash.size": "0x31E000",
+          "radio.pa0DbmSupport": "false",
+          "radio.pa10DbmSupport": "false",
+          "radio.pa20DbmSupport": "true",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "brd4117a_pa10.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x320000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x80000",
+          "deviceInformation.deviceNumber": "1420",
+          "flash.size": "0x31E000",
+          "radio.pa0DbmSupport": "false",
+          "radio.pa10DbmSupport": "true",
+          "radio.pa20DbmSupport": "false",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "heiman4104_mg24a_39m_iadc.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x180000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x40000",
+          "deviceInformation.deviceNumber": "10",
+          "flash.size": "0x17E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "true",
+          "radio.pa20DbmSupport": "false",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      },
+      {
+        "profile": "lg4142_brd4116a_dev10_i2c0s2.repl",
+        "preserved_attributes": {
+          "msc.flashSize": "0x320000",
+          "msc.flashPageSize": "0x2000",
+          "sram.size": "0x80000",
+          "deviceInformation.deviceNumber": "10",
+          "flash.size": "0x31E000",
+          "radio.pa0DbmSupport": "true",
+          "radio.pa10DbmSupport": "true",
+          "radio.pa20DbmSupport": "false",
+          "lockbitsdata.size": "0x2000"
+        },
+        "differences": {}
+      }
+    ]
+  },
+  "tool_smokes": {
+    "rtt_console_help": "PASS",
+    "provision_tool_help": "PASS",
+    "device_provision_data_loaded": false
+  },
+  "firmware_controls": {
+    "overlay-ltech": [
+      {
+        "runtime": "overlay-candidate",
+        "root": "/home/jchen73/renode-integration",
+        "status": "PASS",
+        "elapsed_seconds": 6.55,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/Ltech/5535/5535_45058_257592_32d68b99c7cd.elf",
+        "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+        "board": "brd2601b",
+        "platform": "platforms/boards/silabs/brd2601b.repl",
+        "overlays": [],
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "hostmailbox_compensation_enabled": true,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning"
+      }
+    ],
+    "overlay-quectel": [
+      {
+        "runtime": "overlay-candidate",
+        "root": "/home/jchen73/renode-integration",
+        "status": "PASS",
+        "elapsed_seconds": 9.92,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/Quectel/5136/5136_554_1462092_63912871cf10.elf",
+        "elf_sha256": "cec91b36cc652f684b1445a2ba54f8fdfcc5e6f6047d3dc2b613d57d8a85b73e",
+        "board": "brd2601b",
+        "platform": "platforms/boards/silabs/brd2601b.repl",
+        "overlays": [],
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "hostmailbox_compensation_enabled": true,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning"
+      }
+    ],
+    "overlay-lg-mg24a": [
+      {
+        "runtime": "overlay-candidate",
+        "root": "/home/jchen73/renode-integration",
+        "status": "PASS",
+        "elapsed_seconds": 9.81,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/LG_Electronics/4142/4142_8704_1507958_01f75e20b25b.elf",
+        "elf_sha256": "9736771a0e3a15fb01804d6435854379374c704a67ceb9e1e518b045c725e24f",
+        "board": "brd2601b",
+        "platform": "matter/renode-thread/overlays/brd2601b_mg24a.repl",
+        "overlays": [],
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "hostmailbox_compensation_enabled": true,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning"
+      }
+    ],
+    "final-tlib-ltech": [
+      {
+        "runtime": "final-tlib",
+        "root": "/home/jchen73/renode-integration",
+        "status": "PASS",
+        "elapsed_seconds": 7.16,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/Ltech/5535/5535_45058_257592_32d68b99c7cd.elf",
+        "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+        "board": "brd2601b",
+        "platform": "platforms/boards/silabs/brd2601b.repl",
+        "overlays": [],
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "hostmailbox_compensation_enabled": true,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning"
+      }
+    ],
+    "composed-dcdc-ltech": [
+      {
+        "runtime": "composed-dcdc",
+        "root": "/home/jchen73/renode-integration",
+        "status": "PASS",
+        "elapsed_seconds": 6.99,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/Ltech/5535/5535_45058_257592_32d68b99c7cd.elf",
+        "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+        "board": "brd2601b",
+        "platform": "platforms/boards/silabs/brd2601b.repl",
+        "overlays": [
+          "matter/renode-thread/overlays/dcdc_xg24.repl"
+        ],
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "hostmailbox_compensation_enabled": true,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning"
+      }
+    ],
+    "final-tlib-lg": [
+      {
+        "runtime": "final-tlib",
+        "root": "/home/jchen73/renode-integration",
+        "status": "PASS",
+        "elapsed_seconds": 9.99,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/LG_Electronics/4142/4142_8704_1507958_01f75e20b25b.elf",
+        "elf_sha256": "9736771a0e3a15fb01804d6435854379374c704a67ceb9e1e518b045c725e24f",
+        "board": "brd2601b",
+        "platform": "matter/renode-thread/overlays/brd2601b_mg24a.repl",
+        "overlays": [],
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "hostmailbox_compensation_enabled": true,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning"
+      }
+    ]
+  },
+  "limits": [
+    "Compiled platform/model contracts do not establish physical identity or full vendor firmware equivalence.",
+    "ADC zero-sample/instant-handshake, relaxed Series-3 TrustZone, widened timer and legacy SYSRTC 33280Hz profiles have explicit limits.",
+    "Original LG runtime-compiled subclass source was not recovered; documented alias/TXFL contracts are reimplemented, not proven source-equivalent.",
+    "All production GATT controls use explicit hostmailbox compensation; no IRQ/timing/power fidelity claim.",
+    "Full commissioning/Thread/CASE/Invoke/Read, MG21 platform/DeviceFamily/HFXO migration, and full deployed-runtime comparison remain pending.",
+    "Production runtime remains unchanged."
+  ]
+}

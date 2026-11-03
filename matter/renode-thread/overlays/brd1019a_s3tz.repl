@@ -1,0 +1,8 @@
+// Migrated: 2026-11-02, Silicon Labs 26q3. Class B.
+// Explicit Series-3 compatibility profile; ADC samples are zero and TrustZone exemption relaxes attribution. Not evidence of analog or security-isolation fidelity.
+using "platforms/boards/silabs/brd1019a.repl"
+
+cpu:
+    enableTrustZone: true
+    init:
+        TryAddImplementationDefinedExemptionRegion 0x11000000 0x113FFFFF

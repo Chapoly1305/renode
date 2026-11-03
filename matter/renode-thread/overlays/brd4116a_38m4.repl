@@ -1,0 +1,7 @@
+// Migrated: 2026-11-02, Silicon Labs 26q3. Class A.
+// Explicit board profile; device identity and vendor commissioning are not established by a successful platform load.
+using "platforms/boards/silabs/brd4116a.repl"
+cmu:
+    hfxoFrequency: 38400000
+nvic:
+    systickFrequency: 38400000

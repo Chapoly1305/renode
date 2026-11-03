@@ -1,0 +1,3 @@
+// Migrated: 2026-11-02, Silicon Labs 26q3. Class B.
+// ADC handshake only; physical 32768Hz SYSRTC and corrected 38.4MHz CMU, no legacy LF calibration compensation. Vendor commissioning pending.
+using "matter/renode-thread/overlays/brd2601b_mg24a_38m4_iadc.repl"

@@ -1,0 +1,6 @@
+// Migrated: 2026-11-02, Silicon Labs 26q3. Class B.
+// Historical per-access BURTC counter, not virtual or physical time. Use only without the real BURTC peripheral; no timing/power validity.
+burtcAccessCounter: Python.PythonPeripheral @ sysbus 0x50064020
+    size: 4
+    initable: false
+    script: "request.Value = request.Counter"

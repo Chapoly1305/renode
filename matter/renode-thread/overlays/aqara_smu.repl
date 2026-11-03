@@ -1,0 +1,10 @@
+// Migrated: 2026-11-02, Silicon Labs 26q3. Class A.
+// Explicit board profile; device identity and vendor commissioning are not established by a successful platform load.
+smu: Miscellaneous.SiLabs.SiLabs_SMU_1 @ {
+        sysbus new Bus.BusMultiRegistration { address: 0x44008000; size: 0x4000; region: "smu_s" };
+        sysbus new Bus.BusMultiRegistration { address: 0x54008000; size: 0x4000; region: "smu_ns" }
+    }
+    cpu0: cpu
+    SecureIRQ -> nvic@0
+    SecurePriviledgedIRQ -> nvic@1
+    NonSecurePriviledgedIRQ -> nvic@2

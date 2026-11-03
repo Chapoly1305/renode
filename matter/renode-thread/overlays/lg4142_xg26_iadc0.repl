@@ -1,0 +1,43 @@
+// Migrated: 2026-11-02, Silicon Labs 26q3. Class B.
+// Instant ADC handshake with zero samples; no analog or PowerSource fidelity, no IRQ model.
+iadc0: Python.PythonPeripheral @ sysbus 0x59004000
+    size: 0x2000
+    initable: true
+    script: '''
+if request.IsInit:
+    CMD            = 0x0C
+    STATUS         = 0x14
+    SINGLEFIFODATA = 0x74
+    SINGLEDATA     = 0x7C
+    SCANFIFODATA   = 0x84
+    SCANDATA       = 0x8C
+    SINGLESTART    = 0x1
+    SINGLESTOP     = 0x2
+    SCANSTART      = 0x8
+    SCANSTOP       = 0x10
+    SINGLEFIFODV   = 0x100
+    SCANFIFODV     = 0x200
+    single_dv = False
+    scan_dv   = False
+else:
+    off = request.Offset & 0xFFF
+    if request.IsWrite:
+        if off == CMD:
+            if request.Value & SINGLESTART:
+                single_dv = True
+            if request.Value & SINGLESTOP:
+                single_dv = False
+            if request.Value & SCANSTART:
+                scan_dv = True
+            if request.Value & SCANSTOP:
+                scan_dv = False
+    elif request.IsRead:
+        if off == STATUS:
+            request.Value = (SINGLEFIFODV if single_dv else 0) | (SCANFIFODV if scan_dv else 0)
+        elif off == SINGLEDATA or off == SINGLEFIFODATA:
+            single_dv = False
+            request.Value = 0
+        elif off == SCANDATA or off == SCANFIFODATA:
+            scan_dv = False
+            request.Value = 0
+'''

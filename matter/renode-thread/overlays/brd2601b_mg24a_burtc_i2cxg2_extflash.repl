@@ -1,0 +1,20 @@
+// Migrated: 2026-11-02, Silicon Labs 26q3. Class A.
+// Explicit board profile; device identity and vendor commissioning are not established by a successful platform load.
+using "platforms/boards/silabs/brd2601b.repl"
+deviceInformation:
+    deviceNumber: 10
+cmu:
+    hfxoFrequency: 39000000
+nvic:
+    systickFrequency: 39000000
+burtc: Timers.EFR32xG2_BURTC @ { sysbus <0x40064000, +0x3034>; sysbus <0x50064000, +0x3034> }
+    frequency: 32768
+extFlashMemory: Memory.MappedMemory
+    size: 0x800000
+extFlash: SPI.GenericSpiFlash @ eusart1
+    underlyingMemory: extFlashMemory
+    manufacturerId: 0xA1
+    memoryType: 0x40
+    capacityCode: 0x17
+gpioPort:
+    37 -> extFlash@0

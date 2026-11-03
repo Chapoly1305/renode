@@ -1,0 +1,3 @@
+// Migrated: 2026-11-02, Silicon Labs 26q3. Class A.
+// Explicit board profile; device identity and vendor commissioning are not established by a successful platform load.
+using "platforms/cpus/silabs/efr32s2/efr32xG26.repl"

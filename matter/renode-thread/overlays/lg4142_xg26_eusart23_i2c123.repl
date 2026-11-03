@@ -1,0 +1,38 @@
+// Migrated: 2026-11-02, Silicon Labs 26q3. Class A.
+// Polled xG26 expansion; original IRQ omissions retained. No physical I2C peer or secure element is fabricated.
+
+eusart2: UART.SiLabs_EUSART_2 @ {
+        sysbus <0x40090000, +0x4000>; // EUSART2_S
+        sysbus <0x50090000, +0x4000>  // EUSART2_NS
+    }
+
+eusart3: UART.SiLabs_EUSART_2 @ {
+        sysbus <0x40094000, +0x4000>; // EUSART3_S
+        sysbus <0x50094000, +0x4000>  // EUSART3_NS
+    }
+
+i2c1: I2C.EFR32xG2_I2CController @ {
+        sysbus <0x400B0000, +0x4000>; // I2C1_S
+        sysbus <0x500B0000, +0x4000>  // I2C1_NS
+    }
+
+i2c2: I2C.EFR32xG2_I2CController @ {
+        sysbus <0x400B4000, +0x4000>; // I2C2_S
+        sysbus <0x500B4000, +0x4000>  // I2C2_NS
+    }
+
+i2c3: I2C.EFR32xG2_I2CController @ {
+        sysbus <0x400B8000, +0x4000>; // I2C3_S  (untagged hole in efr32xG26.repl)
+        sysbus <0x500B8000, +0x4000>  // I2C3_NS
+    }
+
+
+usart1: UART.SiLabs_USART_0 @ {
+        sysbus <0x400A4000, +0x4000>; // USART1_S
+        sysbus <0x500A4000, +0x4000>  // USART1_NS
+    }
+
+usart2: UART.SiLabs_USART_0 @ {
+        sysbus <0x400A8000, +0x4000>; // USART2_S
+        sysbus <0x500A8000, +0x4000>  // USART2_NS
+    }

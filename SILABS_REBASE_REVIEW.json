@@ -6,8 +6,8 @@
   "branch": "integration/stock-ble-on-silabs-26q3",
   "status": "BOOT_TO_GATT_PASS_WITH_EXPLICIT_COMPENSATION_PENDING_COMMISSIONING",
   "method": "Rebase the 21 commits after Silicon Labs 26q1 onto 26q3; resolve every historical Infrastructure bump to the separately ported candidate rather than reinstalling old model commits.",
-  "infrastructure": "af7991ec92d0a4b712302393b25da3ba9a7ecf39",
-  "tlib": "43a51de2aa1b05fdfd2073681b9b027af555422c",
+  "infrastructure": "ff6aab394d1f38c6297896274e1737f31fbd0d2e",
+  "tlib": "c04d273709cfe8e604233199dc54f638210c9eb5",
   "resources_for_validation": "9d7824771f3db67663950cae06f5bb7f89fbf33b",
   "retained": [
     "stock firmware BLE/Thread host bridges",
@@ -84,7 +84,7 @@
   ],
   "limits": [
     "Old Docker runtime-only script still depends on hardcoded /home/chen paths and separately built chip-tool/otbr",
-    "Local mw-emu overlays are not automatically imported",
+    "Migrated optional board profiles are explicit; compatibility shims and diagnostics are not automatically enabled",
     "Production corpus ELFs are available; the original reference firmware and fake-BLE chip-tool/OTBR binaries were not found",
     "Do not replace the existing runtime until stock firmware controls pass",
     "Boot-to-GATT is validated with compensation on two production ELFs; full commissioning/Thread/Invoke still pending. Current runtime was not replaced."
@@ -100,11 +100,13 @@
     "control_difference": "Existing runtime applies a local hostmailbox doorbell acknowledgement compensation not present in the GitHub fork delta",
     "attribution_limit": "Not an exact source-baseline comparison; does not establish a new upstream 26q3 regression. Compensation has not been migrated or causally revalidated on 26q3."
   },
-  "latest_component_checks_passed": 79,
   "latest_changes": [
     "Guarded opt-in hostmailbox compensation with negative tests",
     "Both wireless bridges now use upstream frequency/10kHz medium routing keys; UDP retains Thread channel numbers",
-    "Stock Matter scenario explicitly enables the compensation"
+    "Stock Matter scenario explicitly enables the compensation",
+    "Configured HFXO calibration, physical Series-2 I2C aliases and raw NACK polling, EUSART synchronous completion/TX-ready",
+    "51 overlay entries reviewed; optional compensation/diagnostics are explicit, private provision-page bytes not bundled",
+    "26q3 tlib with a spec-constrained rebase of the historical MOV.W SP fix"
   ],
   "migration_coverage": {
     "all_historical_changes_analyzed_and_migrated": false,
@@ -113,12 +115,15 @@
       "renode": 21,
       "infrastructure": 6
     },
-    "local_artifacts": "51 overlay-related files inventoried but not migrated; all 17 unique C# workspace variants reviewed, physical deltas ported and sham/FIFO diagnostic variants excluded",
+    "local_artifacts": "All 51 overlay-related files and 17 unique local C# variants have explicit migration or exclusion decisions. 47 profiles load with 26q3. Vendor/runtime equivalence remains incomplete.",
     "inventory": "SILABS_MIGRATION_INVENTORY.json",
-    "validation_incomplete": "Full commissioning/Thread/CASE/Invoke/Read and broad vendor corpus not validated"
+    "validation_incomplete": "Full commissioning/Thread/CASE/Invoke/Read and broad vendor corpus not validated",
+    "remaining_platform_work": "MG21 SoC/board/DeviceFamily/HFXO; its historical tlib fix is already separately migrated."
   },
   "hash_regression_report": "tests/peripherals/SiLabs/symcrypto_hash_validation_20261102.json",
   "performance_report": "tests/peripherals/SiLabs/performance_validation_20261102.json",
   "additional_SHA256_descriptor_checks_passed": 6,
-  "local_migration_checkpoint": "tests/peripherals/SiLabs/local_migration_validation_20261102.json"
+  "local_migration_checkpoint": "tests/peripherals/SiLabs/local_migration_validation_20261102.json",
+  "overlay_migration_checkpoint": "tests/peripherals/SiLabs/overlay_migration_validation_20261102.json",
+  "prior_component_checks_passed": 79
 }

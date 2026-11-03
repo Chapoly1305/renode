@@ -1,4 +1,4 @@
-i2c0: I2C.EFR32_I2CController @ {
+i2c0: I2C.EFR32xG2_I2CController @ {
         sysbus <0x4B000000, +0x4000>; // I2C0_S
         sysbus <0x5B000000, +0x4000>  // I2C0_NS
     }

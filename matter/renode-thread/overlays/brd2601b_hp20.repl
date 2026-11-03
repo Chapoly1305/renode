@@ -1,0 +1,10 @@
+// Migrated: 2026-11-02, Silicon Labs 26q3. Class A.
+// Explicit board profile; device identity and vendor commissioning are not established by a successful platform load.
+using "platforms/boards/silabs/brd2601b.repl"
+radio:
+    pa10DbmSupport: false
+    pa20DbmSupport: true
+cmu:
+    hfxoFrequency: 39000000
+nvic:
+    systickFrequency: 39000000

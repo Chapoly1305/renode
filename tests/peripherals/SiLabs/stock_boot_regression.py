@@ -21,6 +21,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--timeout", type=float, default=70)
     parser.add_argument("--board", default="brd2601b")
+    parser.add_argument("--platform", type=Path, help="Platform path relative to each runtime root")
+    parser.add_argument("--overlay", action="append", type=Path, default=[], help="Additive platform path relative to each runtime root")
     parser.add_argument("--load-base", type=lambda x: int(x, 0), default=0x08006000)
     parser.add_argument("--image", default="local/renode-build:silabs-26q3")
     parser.add_argument("--hostmailbox-compensation", action="store_true",
@@ -40,13 +42,26 @@ def main():
         if not re.fullmatch(r"[\w-]+", label):
             parser.error("runtime label must contain letters, numbers, hyphens or underscores")
         root = Path(root).resolve(strict=True)
+        platform = args.platform or Path(f"platforms/boards/silabs/{args.board}.repl")
+        platforms = [platform, *args.overlay]
+        for path in platforms:
+            if path.is_absolute() or not re.fullmatch(r"[\w./-]+\.repl", str(path)) or '..' in path.parts:
+                parser.error("platform paths must be relative .repl paths without parent traversal")
+            if not (root / path).resolve(strict=True).is_relative_to(root):
+                parser.error("platform must resolve inside the runtime root")
+        if args.overlay:
+            # Merge registration cancellations before instantiation. Loading a
+            # second description cannot cancel an already registered device.
+            platform_commands = 'machine LoadPlatformDescriptionFromString """\n' + '\n'.join(f'using "{path}"' for path in platforms) + '\n"""'
+        else:
+            platform_commands = f'machine LoadPlatformDescription @{platform}'
         case = args.output / label
         case.mkdir(exist_ok=True)
         for old in ("renode.log", "stdout.log", "monitor.log"):
             (case / old).unlink(missing_ok=True)
         compensation_command = "sysbus.radio HostMailboxDoorbellCompensationEnabled true" if args.hostmailbox_compensation else ""
         (case / "boot.resc").write_text(f'''mach create "deployed"
-machine LoadPlatformDescription @platforms/boards/silabs/{args.board}.repl
+{platform_commands}
 machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
 sysbus LoadELF @/workspace/device.elf
 cpu VectorTableOffset {args.load_base:#x}
@@ -118,6 +133,7 @@ while True:
         result = {"runtime": label, "root": str(root), "status": status,
                   "elapsed_seconds": round(elapsed, 2), "elf": str(elf),
                   "elf_sha256": hashlib.sha256(data).hexdigest(), "board": args.board,
+                  "platform": str(platform), "overlays": [str(p) for p in args.overlay],
                   "board_identity_confirmed": False, "load_base": hex(args.load_base),
                   "timeout_seconds": args.timeout, "terminated_by_harness": True,
                   "hostmailbox_compensation_enabled": args.hostmailbox_compensation,

@@ -1,0 +1,29 @@
+// Migrated: 2026-11-02, Silicon Labs 26q3. Class B.
+// Explicit Series-3 compatibility profile; ADC samples are zero and TrustZone exemption relaxes attribution. Not evidence of analog or security-isolation fidelity.
+adc0: Python.PythonPeripheral @ sysbus 0x40004000
+    size: 0x2000
+    initable: true
+    script: '''
+if request.IsInit:
+    CMD          = 0x0C
+    STATUS       = 0x14
+    SCANFIFODATA = 0x74
+    SCANSTART    = 0x8
+    SCANSTOP     = 0x10
+    SCANFIFODV   = 0x200
+    scan_dv = False
+else:
+    off = request.Offset & 0xFFF
+    if request.IsWrite:
+        if off == CMD:
+            if request.Value & SCANSTART:
+                scan_dv = True
+            if request.Value & SCANSTOP:
+                scan_dv = False
+    elif request.IsRead:
+        if off == STATUS:
+            request.Value = SCANFIFODV if scan_dv else 0
+        elif off == SCANFIFODATA:
+            scan_dv = False
+            request.Value = 0
+'''

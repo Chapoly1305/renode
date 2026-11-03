@@ -1,0 +1,425 @@
+{
+  "date": "2026-11-02",
+  "scope": "All 51 inventoried overlay-related files; 26q3 migration and explicit diagnostic/private-data dispositions",
+  "default_policy": "No optional shim, compensation, provisioning data or diagnostic is activated automatically. Select an explicit profile.",
+  "entries": {
+    "adc0_sixg301.repl": {
+      "target": "matter/renode-thread/overlays/adc0_sixg301.repl",
+      "classification": "B",
+      "decision": "Retain explicit additive profile with current APIs; hardware coverage limited to original model/shim.",
+      "source_sha256": "7c60a83bb06c72c7a1d0fde0132873e4fa21f8b9aa6bda7462bd2bf994a7cdad",
+      "target_sha256": "425f9aaf5867a540a2577cfc91be84420eb456c0d453969044c582af7b8a27cc",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "aqara_smu.repl": {
+      "target": "matter/renode-thread/overlays/aqara_smu.repl",
+      "classification": "A",
+      "decision": "Retain explicit additive profile with current APIs; hardware coverage limited to original model/shim.",
+      "source_sha256": "71f6e46471d691dffd538d9daca8c1c6a402ee67d6bcb733042e99359971e2bc",
+      "target_sha256": "4633e0cae6a0b60cdc9421701538be23ddc092e75da3bc5f77b60a57dc4db1c0",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd1019a_s3tz.repl": {
+      "target": "matter/renode-thread/overlays/brd1019a_s3tz.repl",
+      "classification": "B",
+      "decision": "Retain explicit additive profile with current APIs; hardware coverage limited to original model/shim.",
+      "source_sha256": "f89cdef8dde58cb36413b4c4923d36ac2ba4622fd458e9324fe3a7b81eabde7c",
+      "target_sha256": "9d7f1abe44fc955b9d267e5a38078b5a379a95e32e3aef3611f8d4bfbeb7a557",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_38m4.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_38m4.repl",
+      "classification": "A",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "08261a4b14683c3b2dcdf2e7f9768ed9577278e59e1bd7466238cf653cb85c3d",
+      "target_sha256": "b29998616be15be58051da4e53f971c378f31e9e5fdc5b7d0c148acbd2cb9637",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_40m.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_40m.repl",
+      "classification": "A",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "e24b4e1ef693ba00f26a101f1da858b1bbbedfbbc8869be1d59fa16fcee0766e",
+      "target_sha256": "ac67541680354f94f686a4cd4d001c667d6a99fcadbcdabf68e1c221a7870349",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_hp20.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_hp20.repl",
+      "classification": "A",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "7577f447fe576ea09f26efcc57b63f572235d028197f3f99cd561d684f51fe25",
+      "target_sha256": "0815345e4b4fade556749bbfb0245e36b2f754d615388ec2df90cdacd4135628",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_hp20_38m4.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_hp20_38m4.repl",
+      "classification": "A",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "2f3c3de731eac04879b5d7977600edd02cdeddaa43e5873bd0b6e1cded8f468a",
+      "target_sha256": "45d485d5746c03baaa4c91769690df45191954d90218d5c5a2924973232e6456",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_hp20_40m.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_hp20_40m.repl",
+      "classification": "A",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "122352740da0404e8e58b4f50155e4dcec7ee55dda9a59cf1f3286bf7525a676",
+      "target_sha256": "66fad36c67f8ee0826c5a93c197e4ee020322b0551349b3c5d68b7f48ada96e2",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_mg24a.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_mg24a.repl",
+      "classification": "A",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "a4b03f6563533ae2a7861b829f73c60d96fd79b8461c2a41d14348b686325c3c",
+      "target_sha256": "d57a5d766965a7db68476210dfefcba8b12a9a0a4f44a6e37321db76458dd389",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_mg24a_38m4.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_mg24a_38m4.repl",
+      "classification": "A",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "87bb842ee7f620cc20fa2adad83ea029e8be996e3c4d889f17f1ddb2304e8837",
+      "target_sha256": "172e3c668ad2804f7a723db61218a96f3f402311d5810ba8e8901d5266476027",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_mg24a_38m4_iadc.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_mg24a_38m4_iadc.repl",
+      "classification": "B",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "6a9346ed70ee7915efae465647331b60c4b69583d38592a54b84154344c0dbd9",
+      "target_sha256": "598374c1e59d52519894fec2bb4fb1da4d3bada1d2936f2de6e565aa1bf0fbc3",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_mg24a_40m.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_mg24a_40m.repl",
+      "classification": "A",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "8a1a2a284951c6c43b762327426519916bd9dd6dadca6e1ee3411ae758fb7f65",
+      "target_sha256": "ad155f7fccc17ea33c424689b8fca70e78e8507f6749e67023066a94702100d9",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_mg24a_burtc.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_mg24a_burtc.repl",
+      "classification": "A",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "d43a0c104376f62e442cc8bb83cf562f8c8456886b2bbbe011dd8d87aac5fbc0",
+      "target_sha256": "8026b5eff2bbfa50c84afa47f0f506ab1d9ccdb756e5ead9cb41489ee58feb0a",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_mg24a_burtc_38m4.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_mg24a_burtc_38m4.repl",
+      "classification": "A",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "42f50fa18bb5dc892b31c470a7ab28442058b7ecd6dcc66e7eb4177ce65db93c",
+      "target_sha256": "27e7c0f738533af30a463237aa5001034dfd4cddcc88c3959709749de0623c6b",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_mg24a_burtc_i2cxg2.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_mg24a_burtc_i2cxg2.repl",
+      "classification": "A",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "fef8931e4fdcff850ddedab5c0e58ae0c25dc4e1abfc194ebd8ceafc53e87dd9",
+      "target_sha256": "8026b5eff2bbfa50c84afa47f0f506ab1d9ccdb756e5ead9cb41489ee58feb0a",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_mg24a_burtc_i2cxg2_38m4.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_mg24a_burtc_i2cxg2_38m4.repl",
+      "classification": "A",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "631b4b17defd90cdbb37e685d1c6625d425acd9c2d0fea7ab8ba79f6064eaa04",
+      "target_sha256": "27e7c0f738533af30a463237aa5001034dfd4cddcc88c3959709749de0623c6b",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_mg24a_burtc_i2cxg2_extflash.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_mg24a_burtc_i2cxg2_extflash.repl",
+      "classification": "A",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "b18b8444f82ec74a172a55bf1fc5c56175f3622aae3c281f2d6c0c4b2efdf298",
+      "target_sha256": "b74923f9ca3971ce160838112735247728ee178ce78527910ad4fa428fc5344a",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_mg24a_hp20.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_mg24a_hp20.repl",
+      "classification": "A",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "ba7fc82376621e0cfc86e2a583a0a3d77649f14280384258dc3c08eace947ecc",
+      "target_sha256": "3e1e36c56902988c409b0e3eb90f7bcbeeead491e7a8608f40a21e755c47400a",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_mg24a_hp20_38m4.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_mg24a_hp20_38m4.repl",
+      "classification": "A",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "521a68fba0cf1b51252d326ea3a451a0683bf636bcca86d5d6d2f37feb483b78",
+      "target_sha256": "bae73df97f639ea7ceda2e602fce1e6140c038d62cafdd325569bb21ee260a2a",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_mg24a_hp20_40m.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_mg24a_hp20_40m.repl",
+      "classification": "A",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "e2dd37c54081412b9ee156daa7bd5436bd26fb83b64f4599c02d071095cf40d1",
+      "target_sha256": "6450690086c784289827ab1f4185b44bcf42840ff8275e78e4a4cb453575a4c9",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd2601b_mg24a_i2cxg2.repl": {
+      "target": "matter/renode-thread/overlays/brd2601b_mg24a_i2cxg2.repl",
+      "classification": "A",
+      "decision": "Thin board overrides over current 26q3 base; CMU and SysTick use selected crystal. Series-2 I2C uses real controller; BURTC uses virtual-time model where selected.",
+      "source_sha256": "73c10beb3aef9084ae61d9eea01a407f6bb6385c41dde5645cb527736fb124ae",
+      "target_sha256": "d57a5d766965a7db68476210dfefcba8b12a9a0a4f44a6e37321db76458dd389",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd4116a_38m4.repl": {
+      "target": "matter/renode-thread/overlays/brd4116a_38m4.repl",
+      "classification": "A",
+      "decision": "Thin overrides over current xG26 board; real Series-2 I2C inherited.",
+      "source_sha256": "ee9327db3ee3e930bf3d73c37116e6f7040ac2d0202d5cb0fead7317e9ad4e8d",
+      "target_sha256": "a9ac113300648a0a9c33955ff6c2e2172c0d1adff72175b7f9f0bb2680fe879b",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd4116a_dev10.repl": {
+      "target": "matter/renode-thread/overlays/brd4116a_dev10.repl",
+      "classification": "A",
+      "decision": "Thin overrides over current xG26 board; real Series-2 I2C inherited.",
+      "source_sha256": "4cb7d8575092128fb79fa049b2edd38c5ddf515a561c8eb82da5cb8e85e1b54f",
+      "target_sha256": "cbc66b68e0d6756f6b61b66caede6ad2809b880a4bc490b7fbb3e51c0b2e4b59",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd4117a_aqara.repl": {
+      "target": "matter/renode-thread/overlays/brd4117a_aqara.repl",
+      "classification": "A",
+      "decision": "Current xG26 SoC/board inherited with real I2C; selected PA/clock/flash options retained; access-counter BURTC replaced by upstream virtual-time peripheral.",
+      "source_sha256": "747eac4e9a9a1df9459b258e884148fb37ef1d1b5e42d7d2f7553e3837eda62b",
+      "target_sha256": "77f467370d2a259d5b5cdaedd4cfde0542b4d2c1d138988cdf7cba31fcc1706e",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd4117a_burtc_i2cxg2.repl": {
+      "target": "matter/renode-thread/overlays/brd4117a_burtc_i2cxg2.repl",
+      "classification": "A",
+      "decision": "Current xG26 SoC/board inherited with real I2C; selected PA/clock/flash options retained; access-counter BURTC replaced by upstream virtual-time peripheral.",
+      "source_sha256": "0d14dc2d78d33165f9314ffdc20b8bc3246e0ad3f34087cf35bf10d052d1e1c6",
+      "target_sha256": "b4ba1cf17351a8f2d155beb47ca601b29951efe0ae0c5777ce784f8b6b42c964",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd4117a_burtc_i2cxg2_38m4.repl": {
+      "target": "matter/renode-thread/overlays/brd4117a_burtc_i2cxg2_38m4.repl",
+      "classification": "A",
+      "decision": "Current xG26 SoC/board inherited with real I2C; selected PA/clock/flash options retained; access-counter BURTC replaced by upstream virtual-time peripheral.",
+      "source_sha256": "1009e6f76cdf547fb97362b4a44eab4b0e4148ddd67cde100bac65ebc72f9857",
+      "target_sha256": "e0541d90cb2a754302f680460ba5f6b01e785637e61dcc494968411f8be2542a",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd4117a_burtc_i2cxg2_extflash.repl": {
+      "target": "matter/renode-thread/overlays/brd4117a_burtc_i2cxg2_extflash.repl",
+      "classification": "A",
+      "decision": "Current xG26 SoC/board inherited with real I2C; selected PA/clock/flash options retained; access-counter BURTC replaced by upstream virtual-time peripheral.",
+      "source_sha256": "2751bee31f56e64adbe7d65f83ed3e2ab020acc7caf1dc5f4c4eeb90a8a29b7a",
+      "target_sha256": "d937f7aef3ff5a5be064a1ea4ec68f359df07ec4a9c013e5ade81b03c440c1a3",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd4117a_i2cxg2.repl": {
+      "target": "matter/renode-thread/overlays/brd4117a_i2cxg2.repl",
+      "classification": "A",
+      "decision": "Current xG26 SoC/board inherited with real I2C; selected PA/clock/flash options retained; access-counter BURTC replaced by upstream virtual-time peripheral.",
+      "source_sha256": "e0a7b79035f2c930fcc9ec1cef92a0335530f96657aec5d582fbd3965328bfc4",
+      "target_sha256": "1fd3ee0a28e398d9bb8b9d30b1615b1cc154e5b955794d06febcd5c091cd8c1a",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "brd4117a_pa10.repl": {
+      "target": "matter/renode-thread/overlays/brd4117a_pa10.repl",
+      "classification": "A",
+      "decision": "Current xG26 SoC/board inherited with real I2C; selected PA/clock/flash options retained; access-counter BURTC replaced by upstream virtual-time peripheral.",
+      "source_sha256": "5a299d488afa895678131b3a7572abea3ccd4195ba4ab9c6637d1f9bd68c495e",
+      "target_sha256": "cbc39d5381136c16b909663a4d72a8efe039db63bea624ba19ef6f5e89fddf37",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "dcdc_xg24.repl": {
+      "target": "matter/renode-thread/overlays/dcdc_xg24.repl",
+      "classification": "A",
+      "decision": "Cancel overlapping upstream DCDC_IF stub before registering full model. Old dcdc_xg24 alone overlapped the stub; diagnostic unreg arm is the necessary physical-model registration fix.",
+      "source_sha256": "08291692a1e3bf9b6b1286a44b26b513f04bf459737b1cf147f06c6f2f7f3ec3",
+      "target_sha256": "7eb56ce63dcd571ca6c893fe5f20886a44ce51d6339f35dcf51da55b3d520ffb",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "dcdc_xg24_unreg.repl": {
+      "target": "matter/renode-thread/overlays/dcdc_xg24_unreg.repl",
+      "classification": "A",
+      "decision": "Cancel overlapping upstream DCDC_IF stub before registering full model. Old dcdc_xg24 alone overlapped the stub; diagnostic unreg arm is the necessary physical-model registration fix.",
+      "source_sha256": "f1ffddc8f7ae3d6262b756ff39ce331d07d7809d81907864e72fe9fc06ecda05",
+      "target_sha256": "7eb56ce63dcd571ca6c893fe5f20886a44ce51d6339f35dcf51da55b3d520ffb",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "efr32xG24_i2cxg2.repl": {
+      "target": "matter/renode-thread/overlays/efr32xG24_i2cxg2.repl",
+      "classification": "A",
+      "decision": "Full stale SoC copy replaced by current upstream SoC; base platform now selects real Series-2 controller with alias windows. Constant IF=0x179 preserved only in compat/i2c0_constant_ack.repl.",
+      "source_sha256": "ed31e4d3a97d7dc51d7f08a60d751d3f7002c3b4e6a17295a4b8e158ec87ead9",
+      "target_sha256": "c0f7e214a7d0f36a10a25143d4f94115c3463684035c48e2f5a3af35fa453b47",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "efr32xG26_i2cxg2.repl": {
+      "target": "matter/renode-thread/overlays/efr32xG26_i2cxg2.repl",
+      "classification": "A",
+      "decision": "Full stale SoC copy replaced by current upstream SoC; base platform now selects real Series-2 controller with alias windows. Constant IF=0x179 preserved only in compat/i2c0_constant_ack.repl.",
+      "source_sha256": "4a2826e625b434845df50b1ca6010fec99e455acc3de7f74d25c3dbdd6f69ea0",
+      "target_sha256": "e4465ebf2f5b6baeb3ea23b10a5597a2d1710683d0de3feb8e4fc5f4bf77b008",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "heiman4104_mg24a_38m4_iadc_lfcal.repl": {
+      "target": "matter/renode-thread/overlays/heiman4104_mg24a_38m4_iadc_lfcal.repl",
+      "classification": "B",
+      "decision": "Preserved as explicit legacy compensation, not selected by default; uncompensated alternative supplied. No automatic promotion pending device replay.",
+      "source_sha256": "05dc3c8fe0bcc19d42d7f8bff159280121a8103d8d6b74c5052267044ff24e19",
+      "target_sha256": "7d0b907a63645a11f30a155b8eb0b92fccb0f27a3460b49d4f4df251835990a2",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "heiman4104_mg24a_39m_iadc.repl": {
+      "target": "matter/renode-thread/overlays/heiman4104_mg24a_39m_iadc.repl",
+      "classification": "B",
+      "decision": "Current board plus explicit ADC handshake shim; 39MHz selected by profile, not auto-detected.",
+      "source_sha256": "a277ff1f340a0fda82733ff7617ff39a83d509a2edb597a1f66a5541a3d988e0",
+      "target_sha256": "0e749aaa978642c12a9354862334a5395e906426b92edd3296c70a401431fadc",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "heiman4104_sysrtc_null_diag.repl": {
+      "target": "matter/renode-thread/overlays/heiman4104_sysrtc_null_diag.repl",
+      "classification": "C",
+      "decision": "Retain null comparison arm as explicit diagnostic; no default activation.",
+      "source_sha256": "5f578932be96b6ddc72b9ad3793c3acb8abf2291dea66ed81d8765b4b9ac39dc",
+      "target_sha256": "d8577cff1fa1b9e189e078ac8cc3b82b4c947464493e87d4a68804f89d812e81",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "heiman4104_timer0_wide.repl": {
+      "target": "matter/renode-thread/overlays/heiman4104_timer0_wide.repl",
+      "classification": "B",
+      "decision": "Preserved only in named compensation profiles; not applied to generic board.",
+      "source_sha256": "3624e646056a857ace606f7c14aadfaabc33854e40ca52be1a779e0d45c33610",
+      "target_sha256": "0525147ef9062a3f37c39422327c814b24c2e49c1c442be5927ca3d748c9014e",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "ikea12289_timer0_wide.repl": {
+      "target": "matter/renode-thread/overlays/ikea12289_timer0_wide.repl",
+      "classification": "B",
+      "decision": "Preserved only in named compensation profiles; not applied to generic board.",
+      "source_sha256": "1290a76c3da53d2b0616e4b5275586acd48efa64f8a58d725a4de3483411522b",
+      "target_sha256": "103b37afcfed066036981aee43772849ec5ef4747c186a5615d75475ff87abe7",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "lg4142_brd4116a_dev10_i2c0s2.repl": {
+      "target": "matter/renode-thread/overlays/lg4142_brd4116a_dev10_i2c0s2.repl",
+      "classification": "A",
+      "decision": "Thin overrides over current xG26 board; real Series-2 I2C inherited.",
+      "source_sha256": "fa23b51522e9e0658a7d2007f09ab9c42705214f06106fc928aa1f1df786ef2c",
+      "target_sha256": "cbc66b68e0d6756f6b61b66caede6ad2809b880a4bc490b7fbb3e51c0b2e4b59",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "lg4142_xg26_cpu_i2c0s2.repl": {
+      "target": "matter/renode-thread/overlays/lg4142_xg26_cpu_i2c0s2.repl",
+      "classification": "A",
+      "decision": "Full stale SoC copy replaced by current upstream SoC; base platform now selects real Series-2 controller with alias windows. Constant IF=0x179 preserved only in compat/i2c0_constant_ack.repl.",
+      "limit": "Original runtime-compiled custom class source was not recovered. Documented alias/TXFL behavior is implemented and component-tested in built-ins; exact source equivalence and vendor scenario remain unproven.",
+      "source_sha256": "caf85ccee6d23ab3398ddd9922061a80d26a3a075b300cb609fbbd7b59459707",
+      "target_sha256": "e4465ebf2f5b6baeb3ea23b10a5597a2d1710683d0de3feb8e4fc5f4bf77b008",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "lg4142_xg26_eusart23_i2c123.repl": {
+      "target": "matter/renode-thread/overlays/lg4142_xg26_eusart23_i2c123.repl",
+      "classification": "A",
+      "decision": "Missing thin custom classes consolidated into built-in Series-2 I2C alias support and EUSART synchronous TX-ready semantics. Controller addresses retained. IRQs remain unwired because original profile did not establish vector numbers.",
+      "limit": "Original runtime-compiled custom class source was not recovered. Documented alias/TXFL behavior is implemented and component-tested in built-ins; exact source equivalence and vendor scenario remain unproven.",
+      "source_sha256": "ac26ceb0bf91adb3435f42ba089185f39e352815122c72f300f9605fab1182bb",
+      "target_sha256": "d44041d7624cb9a707a4c1af9a93c045a17a657a4438ccb859076e04bf415844",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "tuya4701_userdata_page.repl": {
+      "target": "matter/renode-thread/overlays/tuya4701_userdata_page.repl",
+      "classification": "A",
+      "decision": "Retain explicit additive profile with current APIs; hardware coverage limited to original model/shim.",
+      "source_sha256": "fe8feca610a255363717d53816e74af0fe29819c08c1ae2d17db6ccf0f675eb8",
+      "target_sha256": "82c356465d69821a3c84709a098b807a0f8fa15e78adcf2e290fcacd5fec1897",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "rtt_console.py": {
+      "target": "matter/renode-thread/overlays/rtt_console.py",
+      "classification": "C",
+      "decision": "Observation/explicit provisioning tool retained. No provision-page bytes or credentials bundled or automatically applied.",
+      "source_sha256": "c882d55cdbd209ffe58869002d79484b9513d081fbeac33f4246d52da450a9d7",
+      "target_sha256": "c882d55cdbd209ffe58869002d79484b9513d081fbeac33f4246d52da450a9d7",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "provision_pages/heiman_provision_page.py": {
+      "target": "matter/renode-thread/overlays/provision_pages/heiman_provision_page.py",
+      "classification": "TOOL",
+      "decision": "Observation/explicit provisioning tool retained. No provision-page bytes or credentials bundled or automatically applied.",
+      "source_sha256": "2532492d3e2a5f947d592ec2af24be6242a7694dfda315a75aff3f2da4b40709",
+      "target_sha256": "2532492d3e2a5f947d592ec2af24be6242a7694dfda315a75aff3f2da4b40709",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "AUDIT.md": {
+      "target": null,
+      "classification": "PROVENANCE",
+      "decision": "Historical notes retained at original source; superseded for migration by this machine-readable manifest. Prior A/B labels are not blindly inherited.",
+      "source_sha256": "422c0a00f8f53d34afa8c91859229d403c7cdd6110a9d47aa1b03eabe66e1bc1",
+      "status": "SOURCE_PROVENANCE_ONLY"
+    },
+    "README.md": {
+      "target": null,
+      "classification": "PROVENANCE",
+      "decision": "Historical notes retained at original source; superseded for migration by this machine-readable manifest. Prior A/B labels are not blindly inherited.",
+      "source_sha256": "11b3e0894a0f68e377a0ec44779ffac2c391d39e1d87c07711005fad82cebcb9",
+      "status": "SOURCE_PROVENANCE_ONLY"
+    },
+    "provision_pages/README.md": {
+      "target": null,
+      "classification": "PROVENANCE",
+      "decision": "Historical notes retained at original source; superseded for migration by this machine-readable manifest. Prior A/B labels are not blindly inherited.",
+      "source_sha256": "daef16d18d0eabddf9781169b84b5933da5cd67622295d8b46046604a42b3aa4",
+      "status": "SOURCE_PROVENANCE_ONLY"
+    },
+    "provision_pages/heiman_4619_4102_provision_0x0817E000_nodackey.bin": {
+      "target": null,
+      "classification": "PRIVATE_DEVICE_DATA",
+      "decision": "Not emulator source. Keep at original private corpus location; do not bundle device provision-page bytes in the reusable emulator repository.",
+      "source_sha256": "8bae8a2449e4210601e52e8f1d443a11f509df638e02d9e12bef567715b21a79",
+      "status": "PRIVATE_DATA_NOT_BUNDLED"
+    },
+    "provision_pages/heiman_4619_4102_provision_0x0817E000_nodackey_csatestcreds.bin": {
+      "target": null,
+      "classification": "PRIVATE_DEVICE_DATA",
+      "decision": "Not emulator source. Keep at original private corpus location; do not bundle device provision-page bytes in the reusable emulator repository.",
+      "source_sha256": "494a77dfdca41eaf00d881cf2921d51997a843820ecde2d29570d424b67329d9",
+      "status": "PRIVATE_DATA_NOT_BUNDLED"
+    },
+    "lg4142_xg26_iadc0.repl": {
+      "target": "matter/renode-thread/overlays/lg4142_xg26_iadc0.repl",
+      "classification": "B",
+      "decision": "Explicit instantaneous IADC handshake returning zero; no analog, PowerSource or IRQ fidelity.",
+      "source_sha256": "1eafdef1e7f2d4031636879eee265249bb03c33fdf45d51fbe46bd70f1da5ead",
+      "target_sha256": "0ae53aae0393f83d45f7c4230f389c856b3ff26f631c22d3997e9e9780cdba39",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    },
+    "i2c0_fake.py": {
+      "target": "matter/renode-thread/overlays/compat/i2c0_fake.py",
+      "classification": "C",
+      "decision": "Historical fake-bus diagnostic only; not referenced by physical profiles.",
+      "source_sha256": "60c1beb39d1d8b9d00f2252e160b0be7f99980b47dc5a7f47c35e7d1dfc7e82e",
+      "target_sha256": "b0b0fe52d772e5b625d177e4e8036e24db47cc9644ce9b2dce01c659108ace19",
+      "status": "PORTED_WITH_DOCUMENTED_LIMITS"
+    }
+  },
+  "validation": {
+    "platform_loads_passed": 47,
+    "unittest_methods_passed": 5,
+    "clock_profiles_passed": 13,
+    "real_I2C_empty_bus_contracts": 2,
+    "virtual_time_BURTC_contracts": 2,
+    "SPI_identity_erased_data_contracts": 2,
+    "report": "tests/peripherals/SiLabs/overlay_migration_validation_20261102.json",
+    "scope_limit": "Compiled model/platform contracts; 27 board memory/part/PA groups match old profiles. Clock API/SysTick and physical I2C/BURTC replacements are explicit. Not every vendor firmware boots or commissions.",
+    "board_attribute_groups_compared": 27,
+    "board_memory_part_PA_differences": 0
+  },
+  "composition": "Additive fragments that cancel registrations (DCDC, legacy fake I2C) must be combined using .repl using entries before construction. stock_boot_regression --overlay performs this composition. SoC fragments require board memory/part settings."
+}

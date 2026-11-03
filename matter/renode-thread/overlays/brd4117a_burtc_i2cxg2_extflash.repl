@@ -1,0 +1,14 @@
+// Migrated: 2026-11-02, Silicon Labs 26q3. Class A.
+// Explicit board profile; device identity and vendor commissioning are not established by a successful platform load.
+using "platforms/boards/silabs/brd4117a.repl"
+burtc: Timers.EFR32xG2_BURTC @ { sysbus <0x4000C000, +0x3034>; sysbus <0x5000C000, +0x3034> }
+    frequency: 32768
+extFlashMemory: Memory.MappedMemory
+    size: 0x800000
+extFlash: SPI.GenericSpiFlash @ eusart1
+    underlyingMemory: extFlashMemory
+    manufacturerId: 0xA1
+    memoryType: 0x40
+    capacityCode: 0x17
+gpioPort:
+    37 -> extFlash@0

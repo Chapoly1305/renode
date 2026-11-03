@@ -1,0 +1,9 @@
+// Migrated: 2026-11-02, Silicon Labs 26q3. Class A.
+// Explicit board profile; device identity and vendor commissioning are not established by a successful platform load.
+using "platforms/boards/silabs/brd4117a.repl"
+cmu:
+    hfxoFrequency: 38400000
+nvic:
+    systickFrequency: 38400000
+burtc: Timers.EFR32xG2_BURTC @ { sysbus <0x4000C000, +0x3034>; sysbus <0x5000C000, +0x3034> }
+    frequency: 32768

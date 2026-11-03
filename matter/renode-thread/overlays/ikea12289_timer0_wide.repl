@@ -1,0 +1,5 @@
+// Migrated: 2026-11-02, Silicon Labs 26q3. Class B.
+// Explicit legacy timer-width compensation; hardware timer width not confirmed, invalid for timing or wrap fidelity.
+using "platforms/boards/silabs/brd2601b.repl"
+timer0:
+    width: 31
