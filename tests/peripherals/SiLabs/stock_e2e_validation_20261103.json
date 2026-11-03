@@ -287,7 +287,18 @@
     "result": "Firmware reaches radio initialization but repeatedly resets. Post-reset fault snapshots alone do not establish stable boot.",
     "baseline_documentation": "https://github.com/Chapoly1305/renode/blob/33ba842acfdaa726be333bf837178bda07a5b38e/scripts/silabs-vuln/zb06_ota_joined.resc",
     "baseline_limits": "Historical experiments required unavailable Gecko bootloader/Secure Element support. Diagnostic instruction hooks are not used for stock Matter qualification.",
-    "current_diagnostic": "output/local-migration/mg21-faults.log; precise fault under review"
+    "current_diagnostic": {
+      "method": "Diagnostic-only instruction hook at existing fault handler 0x2882c; no PC or firmware changes",
+      "CFSR": "0x10000 (UNDEFINSTR)",
+      "stacked_fault_PC": "0x77bc",
+      "instruction_bytes": "42 de",
+      "decoded_instruction": "UDF #0x42 (explicit firmware assertion)",
+      "baseline_match": "The historical experiment document explicitly records the same UDF #0x42 at 0x77bc after the MOV.W SP workaround; stable vendor boot was already limited by missing bootloader/SE support.",
+      "evidence": [
+        "output/local-migration/mg21-faults.log",
+        "output/local-migration/mg21-fault-diagnostic-pc-stdout.log"
+      ]
+    }
   },
   "limits": [
     "Hostmailbox acknowledgement and host MLE/RA timing compensation are explicit, retained simulation settings.",
@@ -299,7 +310,6 @@
   ],
   "remaining": [
     "Clean checkout preparation/build/image reproduction",
-    "Resolve current MG21 UNDEFINSTR diagnostic before attributing its reset loop",
     "Final source/feature inventory audit, commit and private artifact backup"
   ]
 }

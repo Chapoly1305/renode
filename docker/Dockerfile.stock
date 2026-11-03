@@ -7,6 +7,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /opt/renode
 COPY renode ./renode
 COPY tools/common.sh ./tools/common.sh
+COPY LICENSE ./LICENSE
+COPY src/Infrastructure/licenses/ ./licenses/infrastructure/
 COPY output/bin/Release/ ./output/bin/Release/
 COPY platforms/ ./platforms/
 COPY scripts/ ./scripts/
@@ -17,5 +19,8 @@ COPY output/host-build/openthread/examples/apps/cli/ot-cli-ftd /host-tools/ot-cl
 COPY output/host-build/otbr/src/agent/otbr-agent /host-tools/otbr-agent
 COPY output/host-build/otbr/third_party/openthread/repo/src/posix/ot-ctl /host-tools/ot-ctl
 COPY output/host-build/otbr-rcp/examples/apps/ncp/ot-rcp /host-tools/ot-rcp
-RUN sha256sum /host-tools/* > /host-tools/SHA256SUMS
+COPY matter/connectedhomeip/LICENSE /host-tools/licenses/connectedhomeip.txt
+COPY matter/connectedhomeip/third_party/openthread/repo/LICENSE /host-tools/licenses/openthread.txt
+COPY matter/connectedhomeip/third_party/ot-br-posix/repo/LICENSE /host-tools/licenses/ot-br-posix.txt
+RUN cd /host-tools && sha256sum chip-tool otbr-agent ot-cli-ftd ot-ctl ot-rcp > SHA256SUMS
 CMD ["./renode", "--disable-xwt", "--hide-log"]

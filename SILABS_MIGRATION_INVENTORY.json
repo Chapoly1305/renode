@@ -995,24 +995,24 @@
     },
     {
       "item": "Local staged-CCM work",
-      "status": "LAB_SOURCE_ARCHIVED_UPSTREAM_RETAINED_VENDOR_REPLAY_PENDING",
-      "finding": "Recovered the lab staged-CCM token-table working patch. 26q3 already implements staged-CCM and context save; retain that implementation and passing upstream vectors. Vendor encrypted-traffic replay remains pending."
+      "status": "LAB_SOURCE_ARCHIVED_UPSTREAM_RETAINED_REAL_ENCRYPTED_TRAFFIC_PASS",
+      "finding": "26q3 staged-CCM implementation retained, original token-table patch archived. Upstream CCM vectors and real secure commissioning/CASE/operational traffic pass with Ltech and LG."
     },
     {
       "item": "Full runtime image differences",
-      "status": "RECOVERY_IN_PROGRESS",
-      "finding": "Recovered lab Infrastructure 43a2158d plus three working files and original DLL. EUSART4 synchronous completion was additionally ported and regressed. Exact old DLL build provenance and runtime-loaded LG subclass source remain unproven."
+      "status": "LAB_SOURCE_DIRTY_FILES_ARCHIVED_RETAINED_CONTRACTS_REGRESSED",
+      "finding": "Recovered lab source base and all three dirty model files; additional EUSART4 completion ported. Preserved upstream hash/staged-CCM replacements. Reimplemented LG aliases/TXFL contracts have tests and the selected LG MG24A profile now completes full commissioning and state-changing operations. Exact original runtime-loaded LG source and old DLL build provenance are unavailable; bitwise equivalence is not claimed."
     },
     {
       "item": "Commissioning host/container tooling",
-      "status": "DEPENDENCIES_RECOVERED_PASE_PASS_THREAD_PENDING",
-      "finding": "Recovered the exact OpenThread 21c9cdd and OTBR 08d546a objects on chen@lab and pushed them to our forks. Recovered native chip-tool and OT CLI; isolated rootless runner passes real Ltech PASE. OT leader precheck still fails; portable source builds and full commissioning remain pending.",
+      "status": "FULL_SOURCE_BUILD_AND_STOCK_E2E_PASS_CLEAN_REBUILD_PENDING",
+      "finding": "Exact top-level and nested OTBR OpenThread commits recovered and published separately. All host tools now build from source. Ltech and selected LG MG24A profile pass full native Thread/CASE/CommissioningComplete and verified Read/Toggle/Read. Self-contained rootless image passes Ltech. Fresh checkout build remains under test.",
       "recovery_report": "tests/peripherals/SiLabs/lab_recovery_validation_20261103.json"
     },
     {
       "item": "MG21 platform/infrastructure/tlib feature branches",
-      "status": "MIGRATED_COMPONENT_VALIDATED_VENDOR_BOOT_PENDING",
-      "reason": "Ported MG21 SoC/board/DeviceFamily and opt-in HFXO unlock. Four HFXO and five synthetic platform tests pass; real firmware boot and legacy model approximations remain unqualified. Historical tlib fix is already migrated and ISA-regressed."
+      "status": "MIGRATED_AND_REGRESSED_LEGACY_VENDOR_LIMIT_MATCHED",
+      "reason": "MG21 platform/DeviceFamily/HFXO and constrained MOV.W SP port pass nine component checks plus ISA controls. Unmodified HS1SA reaches initialization but hits deliberate UDF #0x42 at 0x77bc, exactly the assertion recorded in the old experiment. Missing bootloader/SE support and stable vendor boot remain legacy limitations; no old firmware patches, forced PC or exploit scaffolding were promoted."
     }
   ],
   "excluded_branches": [
@@ -1042,9 +1042,9 @@
     "tests/peripherals/SiLabs/lab_recovery_validation_20261103.json"
   ],
   "latest_checkpoint": {
-    "infrastructure": "67f781b25566deb2eaffc2361ba827b3ec9a9ae2",
+    "infrastructure": "03fbfb64",
     "status": "IN_PROGRESS",
     "all_required_work_complete": false,
-    "report": "tests/peripherals/SiLabs/lab_recovery_validation_20261103.json"
+    "report": "tests/peripherals/SiLabs/stock_e2e_validation_20261103.json"
   }
 }
