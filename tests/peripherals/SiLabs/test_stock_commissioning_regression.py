@@ -1,6 +1,8 @@
 """Public, firmware-free evidence checks for the stock commissioning runner."""
 import importlib.util
+import io
 import json
+from contextlib import redirect_stderr
 from pathlib import Path
 import subprocess
 import sys
@@ -124,6 +126,15 @@ class EvidenceTests(unittest.TestCase):
                          'machine LoadPlatformDescription @board.repl')
         self.assertEqual(stock.platform_description('board.repl', ['old-board.repl']),
                          'machine LoadPlatformDescriptionFromString """\nusing "board.repl"\nusing "old-board.repl"\n"""')
+
+    def test_overlay_parent_traversal_rejected_before_docker(self):
+        argv = [str(SCRIPT), '--bundled-image', 'synthetic-image', '--elf', '/no/firmware',
+                '--output', '/no/output', '--pase-only', '--overlay', '../private.repl']
+        with patch.object(sys, 'argv', argv), redirect_stderr(io.StringIO()) as errors:
+            with self.assertRaises(SystemExit) as raised:
+                stock.main()
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn('platform/overlay must be relative', errors.getvalue())
 
     def test_persistent_session_separates_pairing_from_actual_reads(self):
         # Fake editline output, not a mocked Matter success. The Python runner
