@@ -1,0 +1,185 @@
+{
+  "date_local": "2026-11-02",
+  "status": "FIXED_BOOT_TO_GATT_WITH_EXPLICIT_COMPENSATION",
+  "infrastructure_source": "a963fee5a5a7585c2f918d6451798636b3e63f8d",
+  "binary_sha256": {
+    "Renode.dll": "da105432d3890aae452e265b723a9e437296b386a1527e97b2d729a881eee2be",
+    "Infrastructure.dll": "c6fe0124cfaecb2078a1038bec97861468cb9096d77a427fc03021360d87e1b1"
+  },
+  "build": {
+    "command": "./build.sh --skip-fetch",
+    "image": "local/renode-build:silabs-26q3",
+    "status": "PASS",
+    "errors": 0,
+    "warnings": [
+      "Pre-existing unused BleCentralBridge.connectIndScheduled"
+    ]
+  },
+  "changes": [
+    {
+      "component": "xG24 hostmailbox",
+      "source": "038e3b4c",
+      "behaviour": "Explicit opt-in compensation of a sustained sequencer poll when both CPUs are masked and both doorbells are enabled and pending. Only enabled pending host bits are acknowledged; unrelated flags and message pointers survive. Monitor/host reads never trigger it; reset/writes/option toggles reset the poll streak.",
+      "default": false,
+      "threshold_polls": 16384,
+      "observability": "Warning log per activation and HostMailboxDoorbellCompensationCount",
+      "classification": "Simulation compensation, not a physical mailbox/IRQ fix"
+    },
+    {
+      "component": "BLE and IEEE802.15.4 bridges",
+      "source": "a963fee5",
+      "behaviour": "Use upstream 10 kHz RF frequency routing keys for the medium and interference queue. Preserve Thread channel 11..26 in UDP payloads. Reset BLE scan to 2402MHz.",
+      "examples": {
+        "BLE_scan": "240200 = 2402MHz / 10kHz",
+        "Thread_channel_15": "242500 = 2425MHz / 10kHz"
+      }
+    },
+    {
+      "component": "stock Matter profile",
+      "file": "matter/renode-thread/scenarios/e2e-15.4.resc",
+      "behaviour": "Explicitly enables the compensation. Generic xG24 platform remains disabled by default."
+    }
+  ],
+  "components": {
+    "symcrypto": {
+      "exit_code": 0,
+      "elapsed_seconds": 8.96,
+      "log": "output/mailbox-fix/components/symcrypto.log",
+      "passed": 14
+    },
+    "secure-engine": {
+      "exit_code": 0,
+      "elapsed_seconds": 15.48,
+      "log": "output/mailbox-fix/components/secure-engine.log",
+      "passed": 30
+    },
+    "bridges": {
+      "exit_code": 0,
+      "elapsed_seconds": 10.64,
+      "log": "output/mailbox-fix/components/bridges.log",
+      "passed": 13
+    },
+    "mailbox-compensation": {
+      "exit_code": 0,
+      "elapsed_seconds": 11.86,
+      "log": "output/mailbox-fix/components/mailbox-compensation.log",
+      "passed": 10
+    },
+    "board-smoke": {
+      "exit_code": 0,
+      "elapsed_seconds": 8.26,
+      "log": "output/mailbox-fix/components/board-smoke.log"
+    },
+    "robot": {
+      "exit_code": 0,
+      "elapsed_seconds": 8.26,
+      "log": "output/mailbox-fix/components/robot.log",
+      "passed": 12
+    }
+  },
+  "component_checks_passed": 79,
+  "board_load_reset": "PASS",
+  "causal_boot_comparison": {
+    "ltech-disabled": [
+      {
+        "runtime": "candidate",
+        "root": "/home/jchen73/renode-integration",
+        "status": "TIMEOUT",
+        "elapsed_seconds": 70.08,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/Ltech/5535/5535_45058_257592_32d68b99c7cd.elf",
+        "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+        "board": "brd2601b",
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "hostmailbox_compensation_enabled": false,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning",
+        "compensation_activations": 0,
+        "gatt_ready_marker_present": false
+      }
+    ],
+    "ltech-enabled": [
+      {
+        "runtime": "candidate",
+        "root": "/home/jchen73/renode-integration",
+        "status": "TIMEOUT",
+        "elapsed_seconds": 70.24,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/Ltech/5535/5535_45058_257592_32d68b99c7cd.elf",
+        "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+        "board": "brd2601b",
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "hostmailbox_compensation_enabled": true,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning",
+        "compensation_activations": 1,
+        "gatt_ready_marker_present": false
+      }
+    ],
+    "ltech-rf-enabled": [
+      {
+        "runtime": "candidate",
+        "root": "/home/jchen73/renode-integration",
+        "status": "PASS",
+        "elapsed_seconds": 8.68,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/Ltech/5535/5535_45058_257592_32d68b99c7cd.elf",
+        "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+        "board": "brd2601b",
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "hostmailbox_compensation_enabled": true,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning",
+        "compensation_activations": 1,
+        "gatt_ready_marker_present": true
+      }
+    ],
+    "quectel-enabled": [
+      {
+        "runtime": "candidate",
+        "root": "/home/jchen73/renode-integration",
+        "status": "PASS",
+        "elapsed_seconds": 9.87,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/Quectel/5136/5136_554_1462092_63912871cf10.elf",
+        "elf_sha256": "cec91b36cc652f684b1445a2ba54f8fdfcc5e6f6047d3dc2b613d57d8a85b73e",
+        "board": "brd2601b",
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "hostmailbox_compensation_enabled": true,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning",
+        "compensation_activations": 1,
+        "gatt_ready_marker_present": true
+      }
+    ]
+  },
+  "interpretation": {
+    "same_build_A_B": "Final Ltech build with compensation disabled times out at 70s; enabled reaches real GATT discovery in 8.68s on identical unmodified ELF.",
+    "routing_control": "Compensation alone on source 038e3b4c still times out; adapting RF keys on a963fee5 restores BLE frame delivery.",
+    "additional_device": "Quectel 5136/554 reaches GATT in 9.87s with the same final profile.",
+    "small_quantum_probe": "Before the compensation, at 10us and 1us quantum the mutually masked handshake persisted through virtual 0.1s. These are short diagnostic probes, not full boot verdicts."
+  },
+  "limits": [
+    "Compensation acknowledges a doorbell on the host behalf; invalid for hardware IRQ, timing, power or concurrency fidelity claims.",
+    "Board mapping inherited from the corpus, not independently confirmed.",
+    "Prior LG sample failed on both old and new runtime; no claim it is now fixed.",
+    "Full PASE/commissioning, Thread attach, CASE, Invoke/Read remain untested; matching host tools/reference bundle unavailable.",
+    "Production runtime not replaced."
+  ],
+  "reproduce": {
+    "GATT": "python3 tests/peripherals/SiLabs/stock_boot_regression.py --runtime candidate=/path/to/renode-integration --elf /path/to/production.elf --output output/gatt-check --hostmailbox-compensation",
+    "uncompensated_control": "Omit --hostmailbox-compensation on the same build and ELF.",
+    "guard_tests": "Run tests/peripherals/SiLabs/hostmailbox_compensation.py in the build image with RENODE_BASE_PATH=/work PYRENODE_PATH=/work PYRENODE_RUNTIME=coreclr and the prepared .venv.",
+    "routing_and_UDP_tests": "tests/peripherals/SiLabs/stock_bridge_regression.py"
+  },
+  "raw_evidence": "output/mailbox-fix/ (local ignored artifacts; no firmware copied into Git)",
+  "previous_failure_report": "tests/peripherals/SiLabs/rebase_validation_20261102.json"
+}

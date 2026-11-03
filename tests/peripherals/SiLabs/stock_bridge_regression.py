@@ -69,7 +69,7 @@ class BridgeRegression(unittest.TestCase):
 
     def learn(self, signature=None):
         mpdu = bytes.fromhex("01002a0000")
-        InterferenceQueue.Add(self.peer, signature or self.oqpsk, 15, 0, netbytes(mpdu))
+        InterferenceQueue.Add(self.peer, signature or self.oqpsk, self.bridge.Channel, 0, netbytes(mpdu))
         self.bridge.ReceiveFrame(netbytes(b"\xa7\x05" + mpdu), self.peer)
 
     def host_send(self, mpdu, channel=15):
@@ -107,7 +107,7 @@ class BridgeRegression(unittest.TestCase):
         found, signature = InterferenceQueue.TryGetTxSignature(self.bridge)
         self.assertTrue(found, "completed TX retains metadata for deferred RX")
         self.assertTrue(signature.IsDecodeCompatibleWith(self.oqpsk))
-        self.assertFalse(InterferenceQueue.AnyOtherOnAir(self.peer, 15))
+        self.assertFalse(InterferenceQueue.AnyOtherOnAir(self.peer, self.bridge.Channel))
 
     def test_05_wrong_channel_is_dropped(self):
         self.learn()
@@ -143,7 +143,7 @@ class BridgeRegression(unittest.TestCase):
         time.sleep(0.02)
         self.run_for(0.02)
         self.assertEqual(self.frames, [b"\xa7\x05" + mpdu for mpdu in mpdus])
-        self.assertFalse(InterferenceQueue.AnyOtherOnAir(self.peer, 15))
+        self.assertFalse(InterferenceQueue.AnyOtherOnAir(self.peer, self.bridge.Channel))
 
     def test_09_reset_requires_fresh_phy_learning(self):
         self.learn()
@@ -173,6 +173,54 @@ class BridgeRegression(unittest.TestCase):
             self.assertEqual(len(sent), count)
         finally:
             self.peer.FrameSent -= handler
+
+    def test_11_ble_hops_across_all_37_physical_data_channels(self):
+        self.peer.Reset()
+        channels = []
+        handler = Action[IRadio, Array[Byte]](lambda sender, data: channels.append(int(sender.Channel)))
+        self.peer.FrameSent += handler
+        try:
+            self.peer.ReceiveFrame(netbytes(bytes.fromhex("d6be898e000901020304050616f6ff000000")), self.bridge)
+            self.run_for(1.2)
+            self.assertEqual(channels[0], 240200)
+            expected = set(range(240400, 242600, 200)) | set(range(242800, 248000, 200))
+            self.assertEqual(set(channels[1:]), expected)
+            self.peer.ReceiveFrame(netbytes(bytes.fromhex("35b19aaf03020213000000")), self.bridge)
+            self.run_for(0.1)
+        finally:
+            self.peer.FrameSent -= handler
+
+
+class RadioRoutingRegression(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        if getattr(test_lib, '_e', None) is None:
+            test_lib.create_emulation(rng_seed=0x2603)
+        cmd = test_lib.execute_monitor_command
+        cmd('mach create "routing"')
+        cmd('machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl')
+        cmd('machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl')
+        cls.machine = test_lib._e.get_mach("routing")
+
+    def tune(self, frequency_mhz):
+        bus = self.machine.sysbus.internal
+        # SYNTH frequency control word, HFXO=39MHz, LO divider=1.
+        bus.WriteDoubleWord(0xB801803C, 1)
+        bus.WriteDoubleWord(0xB8018034, round(frequency_mhz * (1 << 19) / 39))
+
+    def test_ble_scan_key_matches_actual_radio_synth(self):
+        self.tune(2402)
+        self.assertEqual(self.machine.sysbus.radio.internal.Channel, 240200)
+        self.assertEqual(self.machine.sysbus.bleCentral.internal.Channel, 240200)
+
+    def test_all_thread_channels_match_actual_radio_and_keep_protocol_number(self):
+        bridge = self.machine.sysbus.ieee802154.internal
+        for channel in range(11, 27):
+            with self.subTest(channel=channel):
+                bridge.ThreadChannel = channel
+                self.tune(2405 + 5 * (channel - 11))
+                self.assertEqual(bridge.Channel, self.machine.sysbus.radio.internal.Channel)
+                self.assertEqual(bridge.ThreadChannel, channel)
 
 
 if __name__ == "__main__":

@@ -23,6 +23,8 @@ def main():
     parser.add_argument("--board", default="brd2601b")
     parser.add_argument("--load-base", type=lambda x: int(x, 0), default=0x08006000)
     parser.add_argument("--image", default="local/renode-build:silabs-26q3")
+    parser.add_argument("--hostmailbox-compensation", action="store_true",
+                        help="Opt into the stock-harness masked-doorbell compensation; invalid for IRQ/timing fidelity claims")
     args = parser.parse_args()
     elf = args.elf.resolve(strict=True)
     data = elf.read_bytes()
@@ -42,6 +44,7 @@ def main():
         case.mkdir(exist_ok=True)
         for old in ("renode.log", "stdout.log", "monitor.log"):
             (case / old).unlink(missing_ok=True)
+        compensation_command = "sysbus.radio HostMailboxDoorbellCompensationEnabled true" if args.hostmailbox_compensation else ""
         (case / "boot.resc").write_text(f'''mach create "deployed"
 machine LoadPlatformDescription @platforms/boards/silabs/{args.board}.repl
 machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
@@ -57,6 +60,7 @@ emulation SetGlobalSerialExecution true
 emulation SetGlobalAdvanceImmediately false
 logFile @/evidence/renode.log true
 logLevel 2
+{compensation_command}
 start
 ''')
         name = "renode-regression-" + uuid.uuid4().hex[:12]
@@ -116,6 +120,7 @@ while True:
                   "elf_sha256": hashlib.sha256(data).hexdigest(), "board": args.board,
                   "board_identity_confirmed": False, "load_base": hex(args.load_base),
                   "timeout_seconds": args.timeout, "terminated_by_harness": True,
+                  "hostmailbox_compensation_enabled": args.hostmailbox_compensation,
                   "docker_exit_after_cleanup": proc.returncode,
                   "scope": "Boot to GATT; no firmware hooks or commissioning"}
         results.append(result)

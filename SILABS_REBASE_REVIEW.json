@@ -4,19 +4,108 @@
   "old_branch": "matter-emulated-commissioning",
   "old_tip": "9d2707317030cd739f467f472bfe805a391265db",
   "branch": "integration/stock-ble-on-silabs-26q3",
-  "status": "COMPONENT_REGRESSIONS_PASS_FIRMWARE_PROMOTION_GATE_FAILED",
+  "status": "BOOT_TO_GATT_PASS_WITH_EXPLICIT_COMPENSATION_PENDING_COMMISSIONING",
   "method": "Rebase the 21 commits after Silicon Labs 26q1 onto 26q3; resolve every historical Infrastructure bump to the separately ported candidate rather than reinstalling old model commits.",
-  "infrastructure": "ef819deb8248b083f7907293061a601e56904a30",
+  "infrastructure": "9a31822582793470e7af48f792ebea90ed3fbba6",
   "tlib": "43a51de2aa1b05fdfd2073681b9b027af555422c",
   "resources_for_validation": "9d7824771f3db67663950cae06f5bb7f89fbf33b",
-  "retained": ["stock firmware BLE/Thread host bridges", "BRD2601B board", "commissioning and operational Invoke/Read harnesses", "historical Docker runtime recipe and its documented permission floor", "diagnostic scenarios, retained explicitly as diagnostics"],
-  "upstream_retained": ["26q3 platform and peripheral updates", "NativeInterface DNNE submodule", "26q3 test_lib and peripheral test suites", "new SecureElement implementation rather than old hand-rolled crypto state"],
-  "build": {"command": "./build.sh --skip-fetch", "container": "local/renode-build:silabs-26q3", "dockerfile": "docker/Dockerfile.build", "status": "PASSED", "errors": 0, "warnings": ["Existing unused connectIndScheduled field in BleCentralBridge"]},
-  "validation": {"SYMCRYPTO_1.py": {"passed": 14}, "secure_engine_commands.py": {"passed": 30, "note": "Exercises upstream SEMAILBOX_2, not the custom SEMAILBOX_1 TXINT change"}, "PROTIMER.robot": {"model": "xg24", "passed": 5, "results": "output/tests/robot_output.xml"}, "SYSRTC_1_rebase.robot": {"passed": 2, "coverage": ["future comparator wins over past comparator", "counter wrap"], "results": "output/sysrtc-rebase/robot_output.xml"}, "stock_bridge_smoke.py": {"status": "PASSED", "scope": "board, both bridges, medium load and reset only"}},
+  "retained": [
+    "stock firmware BLE/Thread host bridges",
+    "BRD2601B board",
+    "commissioning and operational Invoke/Read harnesses",
+    "historical Docker runtime recipe and its documented permission floor",
+    "diagnostic scenarios, retained explicitly as diagnostics"
+  ],
+  "upstream_retained": [
+    "26q3 platform and peripheral updates",
+    "NativeInterface DNNE submodule",
+    "26q3 test_lib and peripheral test suites",
+    "new SecureElement implementation rather than old hand-rolled crypto state"
+  ],
+  "build": {
+    "command": "./build.sh --skip-fetch",
+    "container": "local/renode-build:silabs-26q3",
+    "dockerfile": "docker/Dockerfile.build",
+    "status": "PASSED",
+    "errors": 0,
+    "warnings": [
+      "Existing unused connectIndScheduled field in BleCentralBridge"
+    ]
+  },
+  "validation": {
+    "SYMCRYPTO_1.py": {
+      "passed": 14
+    },
+    "secure_engine_commands.py": {
+      "passed": 30,
+      "note": "Exercises upstream SEMAILBOX_2, not the custom SEMAILBOX_1 TXINT change"
+    },
+    "PROTIMER.robot": {
+      "model": "xg24",
+      "passed": 5,
+      "results": "output/tests/robot_output.xml"
+    },
+    "SYSRTC_1_rebase.robot": {
+      "passed": 2,
+      "coverage": [
+        "future comparator wins over past comparator",
+        "counter wrap"
+      ],
+      "results": "output/sysrtc-rebase/robot_output.xml"
+    },
+    "stock_bridge_smoke.py": {
+      "status": "PASSED",
+      "scope": "board, both bridges, medium load and reset only"
+    }
+  },
   "wireless_api_port": "BLE emits an explicit LE 1M PHY signature; 802.15.4 learns the transmitting device's OQPSK/DSSS signature; completed transmissions retain upstream metadata until the next TX",
   "commit_map": "SILABS_COMMIT_MAP.json",
-  "expanded_regression_report": "tests/peripherals/SiLabs/rebase_validation_20261102.json",
-  "firmware_gate": {"status": "FAIL", "sample": "Ltech 5535/45058", "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8", "runtime_control": "GATT ready in 8.88 seconds", "candidate": "No GATT ready within 70 seconds", "symptom": "M33 and sequencer PRIMASK=1; HOSTMAILBOX.IF=RFMAILBOX.IF=1; sequencer PC=0x2B84", "control_difference": "Existing runtime applies a local hostmailbox doorbell acknowledgement compensation not present in the GitHub fork delta", "attribution_limit": "Not an exact source-baseline comparison; does not establish a new upstream 26q3 regression. Compensation has not been migrated or causally revalidated on 26q3."},
-  "validation_plan": ["compile all CPU backends and C# models", "SYMCRYPTO known-answer vectors", "Secure Engine command vectors", "PROTIMER and SYSRTC regression", "BRD2601B and bridge instantiation", "uninstrumented firmware commissioning and Invoke/Read controls"],
-  "limits": ["Old Docker runtime-only script still depends on hardcoded /home/chen paths and separately built chip-tool/otbr", "Local mw-emu overlays are not automatically imported", "Production corpus ELFs are available; the original reference firmware and fake-BLE chip-tool/OTBR binaries were not found", "Do not replace the existing runtime until stock firmware controls pass"]
+  "expanded_regression_report": "tests/peripherals/SiLabs/mailbox_fix_validation_20261102.json",
+  "firmware_gate": {
+    "status": "PASS_WITH_COMPENSATION",
+    "samples": {
+      "Ltech_5535_45058": {
+        "GATT_seconds": 8.68
+      },
+      "Quectel_5136_554": {
+        "GATT_seconds": 9.87
+      }
+    },
+    "same_build_negative_control": "Ltech without hostmailbox compensation still times out at 70s",
+    "scope": "Boot through actual BLE/GATT C1/C2/CCCD discovery, not commissioning",
+    "activation": "HostMailboxDoorbellCompensationEnabled=true in the stock scenario; generic model defaults to false",
+    "limitation": "Acknowledges enabled pending host doorbell on behalf of masked host; not physical IRQ/timing behaviour"
+  },
+  "validation_plan": [
+    "compile all CPU backends and C# models",
+    "SYMCRYPTO known-answer vectors",
+    "Secure Engine command vectors",
+    "PROTIMER and SYSRTC regression",
+    "BRD2601B and bridge instantiation",
+    "uninstrumented firmware commissioning and Invoke/Read controls"
+  ],
+  "limits": [
+    "Old Docker runtime-only script still depends on hardcoded /home/chen paths and separately built chip-tool/otbr",
+    "Local mw-emu overlays are not automatically imported",
+    "Production corpus ELFs are available; the original reference firmware and fake-BLE chip-tool/OTBR binaries were not found",
+    "Do not replace the existing runtime until stock firmware controls pass",
+    "Boot-to-GATT is validated with compensation on two production ELFs; full commissioning/Thread/Invoke still pending. Current runtime was not replaced."
+  ],
+  "prior_regression_report": "tests/peripherals/SiLabs/rebase_validation_20261102.json",
+  "prior_firmware_gate": {
+    "status": "FAIL",
+    "sample": "Ltech 5535/45058",
+    "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+    "runtime_control": "GATT ready in 8.88 seconds",
+    "candidate": "No GATT ready within 70 seconds",
+    "symptom": "M33 and sequencer PRIMASK=1; HOSTMAILBOX.IF=RFMAILBOX.IF=1; sequencer PC=0x2B84",
+    "control_difference": "Existing runtime applies a local hostmailbox doorbell acknowledgement compensation not present in the GitHub fork delta",
+    "attribution_limit": "Not an exact source-baseline comparison; does not establish a new upstream 26q3 regression. Compensation has not been migrated or causally revalidated on 26q3."
+  },
+  "latest_component_checks_passed": 79,
+  "latest_changes": [
+    "Guarded opt-in hostmailbox compensation with negative tests",
+    "Both wireless bridges now use upstream frequency/10kHz medium routing keys; UDP retains Thread channel numbers",
+    "Stock Matter scenario explicitly enables the compensation"
+  ]
 }

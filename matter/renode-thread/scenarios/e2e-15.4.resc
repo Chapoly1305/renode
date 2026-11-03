@@ -5,6 +5,11 @@ mach create "stock"
 machine LoadPlatformDescription @platforms/boards/silabs/brd2601b.repl
 machine LoadPlatformDescription @matter/renode-thread/scenarios/phase3-bridges.repl
 sysbus LoadELF @matter/brd2601b-matter-silabs-lighting-example.out
+# Compatibility profile for stock firmware: acknowledge a sustained masked
+# hostmailbox doorbell deadlock. This is model-side compensation and invalidates
+# IRQ/timing fidelity claims; every activation is logged and counted. Set false
+# for an uncompensated control. Generic xG24 platforms default to false.
+sysbus.radio HostMailboxDoorbellCompensationEnabled true
 # --- the real-time fix: model the M33 (+ M0+ radio sequencer) at the real 39 MHz, not the 100-MIPS default.
 # Without this the emulation runs ~0.68x real-time and host-OpenThread MAC/MLE timing fails to line up.
 cpu PerformanceInMips 39

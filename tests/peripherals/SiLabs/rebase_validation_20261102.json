@@ -135,5 +135,6 @@
     "firmware": "python3 tests/peripherals/SiLabs/stock_boot_regression.py --runtime runtime-control=/path/to/existing/renode --runtime candidate=/path/to/renode-integration --elf /path/to/actual.elf --output output/rebase-regression/sample",
     "inputs": "Ltech 5535/45058 and LG 4142/8704 production corpus ELF, brd2601b, load base 0x08006000; see boot_comparison for hashes."
   },
-  "raw_evidence": "output/rebase-regression/ (local ignored directory; no firmware copied into Git)"
+  "raw_evidence": "output/rebase-regression/ (local ignored directory; no firmware copied into Git)",
+  "follow_up_fix_report": "tests/peripherals/SiLabs/mailbox_fix_validation_20261102.json"
 }
