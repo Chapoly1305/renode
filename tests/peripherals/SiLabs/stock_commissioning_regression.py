@@ -22,6 +22,9 @@ DATASET = '0e080000000000010000000300000f35060004001fffe002081111111122222222070
 ONOFF_CLUSTER_ID = 0x0006
 MAX_ENDPOINTS = 32  # Bound untrusted Descriptor fan-out in an automated qualification run.
 FAILURE_MARKERS = ('Run command failure:', 'Response Failure:', 'Error: ', 'InitArgs:')
+# The Matter protocol log also contains "[EM] >>> [E:...]". That is *not*
+# editline's next prompt, and matching it cuts off an in-flight PASE command.
+INTERACTIVE_PROMPT = re.compile(r'(?m)^(?:\x1b\[[0-9;]*[A-Za-z])*>>> ')
 
 
 def platform_description(platform, overlays):
@@ -112,9 +115,9 @@ def wait_for_prompt(process, log_path, timeout, start=0, marker=None):
         chunk = text[start:]
         echoed = chunk.find(marker) if marker is not None else 0
         if echoed >= 0:
-            prompt = chunk.find('>>> ', echoed + len(marker) if marker else 0)
-            if prompt >= 0:
-                return chunk[:prompt], True
+            prompt = INTERACTIVE_PROMPT.search(chunk, echoed + len(marker) if marker else 0)
+            if prompt is not None:
+                return chunk[:prompt.start()], True
         if process.poll() is not None:
             break
         time.sleep(0.1)
@@ -430,9 +433,18 @@ while True:
             pairing_text, completed = interactive_command(client, out / 'interactive.log',
                                                           [*pairing_args, '--pase-only', '1'], args.timeout + 15)
             (out / 'pairing.log').write_text(pairing_text)
-            pairing_status = ('PASE_PASS' if command_succeeded(pairing_text, completed) and
-                              'PASE establishment successful' in pairing_text else
-                              'PAIRING_TIMEOUT' if not completed and client.poll() is None else 'PAIRING_FAILED')
+            if command_succeeded(pairing_text, completed) and 'PASE establishment successful' in pairing_text:
+                pairing_status = 'PASE_PASS'
+            elif completed and any(marker in pairing_text for marker in
+                                   ('Pairing Failure', 'PASE establishment failed')):
+                pairing_status = 'PAIRING_FAILED'
+            elif not completed and client.poll() is None and 'PASE establishment successful' not in pairing_text:
+                pairing_status = 'PAIRING_TIMEOUT'
+            else:
+                # A prompt/stream mismatch is harness evidence, not a negative
+                # PASE result. The full interactive log may contain a later marker.
+                pairing_status = 'HARNESS_OR_BOOT_ERROR'
+                (out / 'harness-error.log').write_text('interactive PASE completion could not be synchronized\n')
             # pairing_returncode stays null: interactive subcommands do not exit.
         else:
             client = subprocess.Popen([*chip_exec, name, '/host-tools/chip-tool', *pairing_args],

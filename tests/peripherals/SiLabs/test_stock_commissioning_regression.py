@@ -70,6 +70,21 @@ class EvidenceTests(unittest.TestCase):
         self.assertFalse(stock.command_succeeded('SoftwareVersion: 2', completed=False))
         self.assertTrue(stock.command_succeeded('SoftwareVersion: 2'))
 
+    def test_protocol_trace_arrow_is_not_interactive_prompt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / 'interactive.log'
+            text = 'CHIP:TOO: Command: pairing ble-thread 1\nCHIP:EM: >>> [E:123] Msg RX\n'
+            log.write_text(text)
+            live = SimpleNamespace(poll=lambda: None)
+            partial, complete = stock.wait_for_prompt(live, log, 0.2, marker='Command: pairing ble-thread 1')
+            self.assertIn('Msg RX', partial)
+            self.assertFalse(complete)
+            log.write_text(text + 'PASE establishment successful\n>>> ')
+            complete_log, complete = stock.wait_for_prompt(live, log, 0.2,
+                                                             marker='Command: pairing ble-thread 1')
+            self.assertTrue(complete)
+            self.assertIn('PASE establishment successful', complete_log)
+
     def test_live_non_tty_without_prompt_is_not_pase_success(self):
         # Reproduces the first real smoke's failure mode: initialization logs
         # appear but libedit suppresses >>> when stdin/stdout are ordinary pipes.
@@ -147,14 +162,17 @@ for line in sys.stdin:
 
     def test_pase_only_actual_runner_reads_in_one_interactive_process(self):
         """Simulated chip-tool prompt proves the runner sends all four commands."""
-        interactive = '''import sys
+        interactive = '''import sys,time
 if not sys.stdin.isatty(): sys.exit('editline requires a TTY')
 sys.stdout.write('>>> '); sys.stdout.flush()
 for line in sys.stdin:
  line=line.strip()
  if line=='quit': break
  sys.stdout.write('CHIP:TOO: Command: '+line+'\\n')
- if line.startswith('pairing '): sys.stdout.write('PASE establishment successful\\n')
+ if line.startswith('pairing '):
+  sys.stdout.write('CHIP:EM: >>> [E:1] (U) Msg RX\\n'); sys.stdout.flush()
+  time.sleep(0.25)
+  sys.stdout.write('PASE establishment successful\\n')
  elif 'specification-version' in line: sys.stdout.write('CHIP:TOO: SpecificationVersion: 17039360\\n')
  elif 'software-version' in line: sys.stdout.write('CHIP:TOO: SoftwareVersion: 42\\n')
  elif 'parts-list' in line: sys.stdout.write('CHIP:TOO: PartsList: 1 entries\\nCHIP:TOO: [1]: 2\\n')
