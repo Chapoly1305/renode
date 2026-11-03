@@ -995,27 +995,27 @@
     },
     {
       "item": "Local staged-CCM work",
-      "status": "UPSTREAM_VECTOR_REPLACEMENT_ONLY",
-      "finding": "Upstream staged CCM vectors pass; original local diagnostic source was not found in this inventory. Original vendor-firmware scenario was not replayed."
+      "status": "LAB_SOURCE_ARCHIVED_UPSTREAM_RETAINED_VENDOR_REPLAY_PENDING",
+      "finding": "Recovered the lab staged-CCM token-table working patch. 26q3 already implements staged-CCM and context save; retain that implementation and passing upstream vectors. Vendor encrypted-traffic replay remains pending."
     },
     {
       "item": "Full runtime image differences",
       "status": "RECOVERY_IN_PROGRESS",
-      "finding": "Actual deployed BLE and EUSART2 classes recovered using pinned ILSpy. Synchronous EUSART completion restored; documented LG TXFL/I2C alias behavior has tests, but original runtime-loaded LG class sources were not found. Full binary semantic comparison remains incomplete."
+      "finding": "Recovered lab Infrastructure 43a2158d plus three working files and original DLL. EUSART4 synchronous completion was additionally ported and regressed. Exact old DLL build provenance and runtime-loaded LG subclass source remain unproven."
     },
     {
       "item": "Commissioning host/container tooling",
-      "status": "HISTORICAL_RECIPE_RETAINED_NOT_FULLY_PORTABLE",
-      "finding": "Pinned connectedhomeip submodule 8bb8a4ff is now checked out and contains FakeBleTransport. Host binaries still need building; rootless commissioning/Thread/Invoke checks remain pending.",
-      "dependency_blocker": "Pinned connectedhomeip Openthread gitlink 21c9cdd484a531d126758fa02e4343eb587f17fb is unavailable from configured openthread/openthread remote; shallow checkout failed. No dependency pin was silently changed."
+      "status": "DEPENDENCIES_RECOVERED_PASE_PASS_THREAD_PENDING",
+      "finding": "Recovered the exact OpenThread 21c9cdd and OTBR 08d546a objects on chen@lab and pushed them to our forks. Recovered native chip-tool and OT CLI; isolated rootless runner passes real Ltech PASE. OT leader precheck still fails; portable source builds and full commissioning remain pending.",
+      "recovery_report": "tests/peripherals/SiLabs/lab_recovery_validation_20261103.json"
+    },
+    {
+      "item": "MG21 platform/infrastructure/tlib feature branches",
+      "status": "MIGRATED_COMPONENT_VALIDATED_VENDOR_BOOT_PENDING",
+      "reason": "Ported MG21 SoC/board/DeviceFamily and opt-in HFXO unlock. Four HFXO and five synthetic platform tests pass; real firmware boot and legacy model approximations remain unqualified. Historical tlib fix is already migrated and ISA-regressed."
     }
   ],
   "excluded_branches": [
-    {
-      "item": "MG21 platform/infrastructure/tlib feature branches",
-      "status": "TLIB_FIX_MIGRATED_PLATFORM_CHANGES_PENDING",
-      "reason": "Historical MOV.W SP fix rebased onto 26q3 and constrained against Arm reference; five positive/negative cases plus upstream ISA controls pass. MG21 SoC/board/DeviceFamily/HFXO still need migration."
-    },
     {
       "item": "bugfix/pseudo_rng",
       "status": "ALREADY_PRESENT_IN_26Q3_AND_REGRESSED",
@@ -1038,12 +1038,13 @@
     "SILABS_REBASE_REVIEW.json",
     "src/Infrastructure/SILABS_REBASE_REVIEW.json",
     "tests/peripherals/SiLabs/mailbox_fix_validation_20261102.json",
-    "tests/peripherals/SiLabs/overlay_migration_validation_20261102.json"
+    "tests/peripherals/SiLabs/overlay_migration_validation_20261102.json",
+    "tests/peripherals/SiLabs/lab_recovery_validation_20261103.json"
   ],
   "latest_checkpoint": {
-    "infrastructure": "ff6aab394d1f38c6297896274e1737f31fbd0d2e",
+    "infrastructure": "67f781b25566deb2eaffc2361ba827b3ec9a9ae2",
     "status": "IN_PROGRESS",
     "all_required_work_complete": false,
-    "report": "tests/peripherals/SiLabs/overlay_migration_validation_20261102.json"
+    "report": "tests/peripherals/SiLabs/lab_recovery_validation_20261103.json"
   }
 }

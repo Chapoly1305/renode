@@ -1,0 +1,122 @@
+{
+  "date_utc": "2026-11-03",
+  "status": "CHECKPOINT_NOT_DEPLOYMENT_QUALIFIED",
+  "infrastructure_model_code": "32dd8806a8b5186d33175fa0789689b297e9c623",
+  "tlib": "c04d273709cfe8e604233199dc54f638210c9eb5",
+  "sdk": "780987ce650ffe6faca1672a390322f45270c335",
+  "source_recovery": {
+    "host": "chen@lab",
+    "infrastructure_archive": {
+      "repository": "Chapoly1305/renode-infrastructure",
+      "branch": "archive/lab-runtime-20261103",
+      "commit": "3bc39b9a9deb389905f02e5f6a331ee0c0bcd933",
+      "base": "43a2158d336a29793b022713945ff37cc9b6f593",
+      "working_files": [
+        "SiLabs_SYMCRYPTO_1.cs",
+        "SiLabs_EUSART_2.cs",
+        "SiLabs_EUSART_4.cs"
+      ]
+    },
+    "sdk_archive": {
+      "repository": "Chapoly1305/connectedhomeip",
+      "branch": "archive/lab-host-sdk-20261103",
+      "commit": "0e8b8c4eb002772aed450f0a098a2d51f6b2a87d",
+      "reconstruction": "8bb8a4ff plus the sole tracked difference from lab HEAD 97d097f7 (PASE CLI option), and both lab working changes (BLE timeout overrides). Full SDK history fetch failed on a missing promisor blob; exact source patches and file hashes are archived."
+    },
+    "openthread": {
+      "repository": "Chapoly1305/openthread",
+      "branch": "renode/mle-fast-attach",
+      "commit": "21c9cdd484a531d126758fa02e4343eb587f17fb",
+      "preserved_original_sha": true,
+      "limitation": "Reduces MLE response delays and caps active-router count for host simulation; not physical Thread timing."
+    },
+    "otbr": {
+      "repository": "Chapoly1305/ot-br-posix",
+      "branch": "renode/mle-fast-attach",
+      "original_commit": "08d546a593c4e73749806eba4341d5d398d63eab",
+      "integration_commit": "4ded16f1a38c5beb4f72ceb389aa18db710ac000",
+      "change": "Retains the original OpenThread pin; changes nested dependency URL/branch to the recovered fork."
+    },
+    "native_tools_manifest": "host-tools/MATERIALS_MANIFEST.json in the private evidence archive",
+    "source_unrecovered": [
+      "Original runtime-loaded LG EUSART/I2C subclass sources; documented contracts are reimplemented but source equivalence is unproven."
+    ]
+  },
+  "model_migration": {
+    "MG21": {
+      "device_family_commit": "0fce95c7",
+      "hfxo_commit": "8c642112",
+      "platforms": [
+        "platforms/cpus/silabs/efr32s2/efr32xG21.repl",
+        "platforms/boards/silabs/brd4180a.repl"
+      ],
+      "HFXO_tests_passed": 4,
+      "platform_contract_tests_passed": 5,
+      "baseline_HFXO_result": "Constructor unsupported; setUpClass failed before tests ran.",
+      "scope": "Synthetic startup and memory/IRQ/I2C/HFXO contracts. Legacy xG22 IP reuse, constant DCDC flags and placeholder watchdog windows remain. No real MG21 firmware boot or timing/power qualification."
+    },
+    "EUSART4": {
+      "commit": "32dd8806",
+      "baseline_failures": 2,
+      "cases": 4,
+      "after_failures": 0,
+      "upstream_robot_passed": 10,
+      "change": "Raise TX-ready/complete IRQs for synchronous transfers, matching the recovered lab patch."
+    },
+    "SYMCRYPTO": "Keep 26q3 staged-CCM implementation rather than replacing it with the old lab token-table patch. The original lab patch is preserved on its archive branch; vendor encrypted-traffic equivalence remains pending."
+  },
+  "build": {
+    "command": "./build.sh --skip-fetch",
+    "image": "local/renode-build:silabs-26q3",
+    "status": "PASS",
+    "warnings": 0,
+    "errors": 0,
+    "elapsed_msbuild_seconds": 40.01
+  },
+  "commissioning": {
+    "pase_ltech": {
+      "status": "PASE_PASS",
+      "elapsed_seconds": 12.53,
+      "pairing_returncode": 0,
+      "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+      "chip_tool_sha256": "781013eeb3574edaef96dc763c614ce08699662d5cdd5fa1ddc8a0c996e59456",
+      "platform": "platforms/boards/silabs/brd2601b.repl",
+      "PASE_established": true,
+      "network_enable_observed": false,
+      "hostmailbox_compensation": true,
+      "BTP_timeout_overrides_ms": 90000,
+      "pase_only": true,
+      "scope": "Real unmodified firmware and native chip-tool; no firmware hooks; full commissioning excludes Invoke/Read unless separately tested"
+    },
+    "thread_ltech": {
+      "status": "HARNESS_OR_BOOT_ERROR",
+      "elapsed_seconds": 18.55,
+      "pairing_returncode": null,
+      "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+      "chip_tool_sha256": "781013eeb3574edaef96dc763c614ce08699662d5cdd5fa1ddc8a0c996e59456",
+      "platform": "platforms/boards/silabs/brd2601b.repl",
+      "PASE_established": false,
+      "network_enable_observed": false,
+      "hostmailbox_compensation": true,
+      "BTP_timeout_overrides_ms": 90000,
+      "pase_only": false,
+      "scope": "Real unmodified firmware and native chip-tool; no firmware hooks; full commissioning excludes Invoke/Read unless separately tested"
+    },
+    "thread_error": "OT simulation node did not become leader",
+    "interpretation": "Real native chip-tool establishes PASE with unmodified Ltech firmware. Full commissioning did not start: OT leader readiness precheck failed (node stayed detached). This is not a demonstrated firmware or 26q3 regression."
+  },
+  "evidence_paths": [
+    "output/local-migration/",
+    "output/commissioning/",
+    "output/host-tools/"
+  ],
+  "limits": [
+    "Full commissioning, Thread attach, CASE, Invoke and Read remain unvalidated.",
+    "Recovered host binaries are reference artifacts; reproducible host-tool/container builds remain in progress.",
+    "Recovered timeout parsing retains the original lab implementation and has not been hardened or separately unit-tested.",
+    "Runtime DLL equivalence remains incomplete; source commit plus dirty files does not prove how an old DLL was built.",
+    "All firmware controls explicitly enable hostmailbox compensation; no physical timing claim.",
+    "Production runtime has not been replaced."
+  ],
+  "all_required_work_complete": false
+}
