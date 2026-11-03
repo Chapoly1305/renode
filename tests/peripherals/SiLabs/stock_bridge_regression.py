@@ -181,12 +181,66 @@ class BridgeRegression(unittest.TestCase):
         self.peer.FrameSent += handler
         try:
             self.peer.ReceiveFrame(netbytes(bytes.fromhex("d6be898e000901020304050616f6ff000000")), self.bridge)
-            self.run_for(1.2)
+            # A healthy synthetic peer answers each event, so supervision must
+            # not engage while measuring the complete channel hop cycle.
+            for _ in range(40):
+                self.run_for(0.03)
+                self.peer.ReceiveFrame(netbytes(bytes.fromhex("35b19aaf0100000000")), self.bridge)
             self.assertEqual(channels[0], 240200)
             expected = set(range(240400, 242600, 200)) | set(range(242800, 248000, 200))
             self.assertEqual(set(channels[1:]), expected)
             self.peer.ReceiveFrame(netbytes(bytes.fromhex("35b19aaf03020213000000")), self.bridge)
             self.run_for(0.1)
+        finally:
+            self.peer.FrameSent -= handler
+
+    def test_12_silent_peer_is_abandoned_and_can_readvertise(self):
+        self.peer.Reset()
+        sent = []
+        handler = Action[IRadio, Array[Byte]](lambda sender, data: sent.append(bytes(data)))
+        self.peer.FrameSent += handler
+        advertisement = netbytes(bytes.fromhex("d6be898e000901020304050616f6ff000000"))
+        try:
+            self.peer.ReceiveFrame(advertisement, self.bridge)
+            self.run_for(1.2)
+            self.assertEqual(self.peer.Channel, 240200)
+            count = len(sent)
+            self.run_for(0.1)
+            self.assertEqual(len(sent), count)
+            self.peer.ReceiveFrame(advertisement, self.bridge)
+            self.run_for(0.001)
+            self.assertEqual(sent[-1][4] & 15, 5)
+            self.assertGreater(len(sent), count)
+        finally:
+            self.peer.FrameSent -= handler
+
+    def test_13_reset_cancels_pending_connect_ind(self):
+        self.peer.Reset()
+        sent = []
+        handler = Action[IRadio, Array[Byte]](lambda sender, data: sent.append(bytes(data)))
+        self.peer.FrameSent += handler
+        try:
+            self.peer.ReceiveFrame(netbytes(bytes.fromhex("d6be898e000901020304050616f6ff000000")), self.bridge)
+            self.peer.Reset()
+            self.run_for(0.01)
+            self.assertEqual(sent, [])
+        finally:
+            self.peer.FrameSent -= handler
+
+    def test_14_old_connection_timer_cannot_inject_into_new_connection(self):
+        self.peer.Reset()
+        sent = []
+        handler = Action[IRadio, Array[Byte]](lambda sender, data: sent.append(bytes(data)))
+        self.peer.FrameSent += handler
+        advertisement = netbytes(bytes.fromhex("d6be898e000901020304050616f6ff000000"))
+        try:
+            self.peer.ReceiveFrame(advertisement, self.bridge)
+            self.run_for(0.0006)
+            self.peer.Reset()
+            self.peer.ReceiveFrame(advertisement, self.bridge)
+            self.run_for(0.01)
+            data_frames = [pdu for pdu in sent if pdu[:4] == bytes.fromhex("35b19aaf")]
+            self.assertEqual(len(data_frames), 1)
         finally:
             self.peer.FrameSent -= handler
 

@@ -352,7 +352,8 @@
         "example_paths": [
           "workspaces/Aqara/4447_10244_0e74c9a12516_a7d4/SiLabsEusart2RxFix.cs"
         ],
-        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+        "status": "REVIEWED_EXCLUDED_DIAGNOSTIC",
+        "decision": "FIFO capacity/overflow perturbation only (1,2,4,8,17,512 bytes or forced RXFULL/overflow suppression); preserve hardware FIFO, do not promote experimental variants."
       },
       {
         "filename": "SiLabsEusart2RxFix.cs",
@@ -361,7 +362,8 @@
         "example_paths": [
           "workspaces/Aqara/4447_10244_0e74c9a12516_a4d2/SiLabsEusart2RxFix.cs"
         ],
-        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+        "status": "REVIEWED_EXCLUDED_DIAGNOSTIC",
+        "decision": "FIFO capacity/overflow perturbation only (1,2,4,8,17,512 bytes or forced RXFULL/overflow suppression); preserve hardware FIFO, do not promote experimental variants."
       },
       {
         "filename": "SiLabsEusart2RxFix.cs",
@@ -370,7 +372,8 @@
         "example_paths": [
           "workspaces/Aqara/4447_10244_0e74c9a12516_a6d8/SiLabsEusart2RxFix.cs"
         ],
-        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+        "status": "REVIEWED_EXCLUDED_DIAGNOSTIC",
+        "decision": "FIFO capacity/overflow perturbation only (1,2,4,8,17,512 bytes or forced RXFULL/overflow suppression); preserve hardware FIFO, do not promote experimental variants."
       },
       {
         "filename": "SiLabsEusart2RxFix.cs",
@@ -380,7 +383,8 @@
           "workspaces/LG_Electronics/4142_8704_01f75e20b25b_pc1/SiLabsEusart2RxFix.cs",
           "workspaces/Ltech/5535_45058_32d68b99c7cd_pc1/SiLabsEusart2RxFix.cs"
         ],
-        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+        "status": "REVIEWED_EXCLUDED_DIAGNOSTIC",
+        "decision": "FIFO capacity/overflow perturbation only (1,2,4,8,17,512 bytes or forced RXFULL/overflow suppression); preserve hardware FIFO, do not promote experimental variants."
       },
       {
         "filename": "SiLabsEusart2RxFix.cs",
@@ -389,7 +393,8 @@
         "example_paths": [
           "workspaces/Aqara/4447_10244_0e74c9a12516_a3rxf/SiLabsEusart2RxFix.cs"
         ],
-        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+        "status": "REVIEWED_EXCLUDED_DIAGNOSTIC",
+        "decision": "FIFO capacity/overflow perturbation only (1,2,4,8,17,512 bytes or forced RXFULL/overflow suppression); preserve hardware FIFO, do not promote experimental variants."
       },
       {
         "filename": "SiLabsEusart2RxFix.cs",
@@ -398,7 +403,8 @@
         "example_paths": [
           "workspaces/Aqara/4447_10244_0e74c9a12516_a2pc/SiLabsEusart2RxFix.cs"
         ],
-        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+        "status": "REVIEWED_EXCLUDED_DIAGNOSTIC",
+        "decision": "FIFO capacity/overflow perturbation only (1,2,4,8,17,512 bytes or forced RXFULL/overflow suppression); preserve hardware FIFO, do not promote experimental variants."
       },
       {
         "filename": "SiLabsEusart2RxFix.cs",
@@ -407,7 +413,8 @@
         "example_paths": [
           "workspaces/Aqara/4447_10244_0e74c9a12516_a5nf/SiLabsEusart2RxFix.cs"
         ],
-        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+        "status": "REVIEWED_EXCLUDED_DIAGNOSTIC",
+        "decision": "FIFO capacity/overflow perturbation only (1,2,4,8,17,512 bytes or forced RXFULL/overflow suppression); preserve hardware FIFO, do not promote experimental variants."
       },
       {
         "filename": "SiLabsEusart2RxFix.cs",
@@ -418,7 +425,8 @@
           "workspaces/Aqara/4447_10244_0e74c9a12516_a1/SiLabsEusart2RxFix.cs",
           "workspaces/Aqara/4447_10244_0e74c9a12516_r1sto/SiLabsEusart2RxFix.cs"
         ],
-        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+        "status": "REVIEWED_EXCLUDED_DIAGNOSTIC",
+        "decision": "FIFO capacity/overflow perturbation only (1,2,4,8,17,512 bytes or forced RXFULL/overflow suppression); preserve hardware FIFO, do not promote experimental variants."
       },
       {
         "filename": "SiLabsEusart2RxGate.cs",
@@ -429,7 +437,8 @@
           "workspaces/R1BWS/C1/SiLabsEusart2RxGate.cs",
           "workspaces/R1BWS/C2/SiLabsEusart2RxGate.cs"
         ],
-        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+        "status": "REVIEWED_PARTLY_UPSTREAM_PENDING_RXBLOCK",
+        "decision": "Current UARTBase.WriteChar and EUSART2 IsReceiveEnabled already gate disabled RX. CMD RXBLOCKEN/DIS and STATUS RXBLOCK are still unmodelled and need a separate port/test; diagnostic census logging excluded."
       },
       {
         "filename": "SiLabsGpio3ExtiFix.cs",
@@ -440,7 +449,8 @@
           "workspaces/Aqara/4447_10247_9904a937e43f_bfix/SiLabsGpio3ExtiFix.cs",
           "workspaces/Ltech/5535_45058_32d68b99c7cd_bfix/SiLabsGpio3ExtiFix.cs"
         ],
-        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+        "status": "MIGRATED_INTO_GPIO3",
+        "decision": "Both copies normalize to the same behaviour after comments/whitespace removal; real fix ported to GPIO3, no runtime-loaded duplicate needed."
       },
       {
         "filename": "SiLabsGpio3ExtiFix.cs",
@@ -451,7 +461,8 @@
           "workspaces/Aqara/4447_10244_57ebc801b4a1_r2fix/SiLabsGpio3ExtiFix.cs",
           "workspaces/Aqara/4447_10244_57ebc801b4a1_r2stock/SiLabsGpio3ExtiFix.cs"
         ],
-        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+        "status": "MIGRATED_INTO_GPIO3",
+        "decision": "Both copies normalize to the same behaviour after comments/whitespace removal; real fix ported to GPIO3, no runtime-loaded duplicate needed."
       },
       {
         "filename": "SiLabsGpio3Sham.cs",
@@ -462,7 +473,8 @@
           "workspaces/Aqara/4447_10244_57ebc801b4a1_vsham/SiLabsGpio3Sham.cs",
           "workspaces/Aqara/4447_10244_57ebc801b4a1_vstock/SiLabsGpio3Sham.cs"
         ],
-        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+        "status": "REVIEWED_EXCLUDED_CONTROL_VARIANT",
+        "decision": "GPIO sham or partial-fix arm from A/B experiments; consolidate the real fix into SiLabs_GPIO_3 rather than shipping controls as production models."
       },
       {
         "filename": "SiLabsGpio3ShamB.cs",
@@ -473,7 +485,8 @@
           "workspaces/Aqara/4447_10244_57ebc801b4a1_bstock/SiLabsGpio3ShamB.cs",
           "workspaces/Aqara/4447_10247_9904a937e43f_bstock/SiLabsGpio3ShamB.cs"
         ],
-        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+        "status": "REVIEWED_EXCLUDED_CONTROL_VARIANT",
+        "decision": "GPIO sham or partial-fix arm from A/B experiments; consolidate the real fix into SiLabs_GPIO_3 rather than shipping controls as production models."
       },
       {
         "filename": "aqara_spi_flash_r4.cs",
@@ -482,7 +495,8 @@
         "example_paths": [
           "workspaces/fix-R4-nor-write-semantics/ws_r4/aqara_spi_flash_r4.cs"
         ],
-        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+        "status": "REVIEWED_PENDING_NOR_MODEL_PORT",
+        "decision": "Current GenericSpiFlash still writes bytes verbatim, omits EAR on write and uses > rather than >= bounds. Port physical semantics with tests; exclude diagnostic counters/logging."
       },
       {
         "filename": "variant.cs",
@@ -491,7 +505,8 @@
         "example_paths": [
           "workspaces/Aqara/4447_10244_57ebc801b4a1_clone/variant.cs"
         ],
-        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+        "status": "REVIEWED_EXCLUDED_CONTROL_VARIANT",
+        "decision": "GPIO sham or partial-fix arm from A/B experiments; consolidate the real fix into SiLabs_GPIO_3 rather than shipping controls as production models."
       },
       {
         "filename": "variant.cs",
@@ -500,7 +515,8 @@
         "example_paths": [
           "workspaces/Aqara/4447_10244_57ebc801b4a1_prevonly/variant.cs"
         ],
-        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+        "status": "REVIEWED_EXCLUDED_CONTROL_VARIANT",
+        "decision": "GPIO sham or partial-fix arm from A/B experiments; consolidate the real fix into SiLabs_GPIO_3 rather than shipping controls as production models."
       },
       {
         "filename": "variant.cs",
@@ -509,7 +525,8 @@
         "example_paths": [
           "workspaces/Aqara/4447_10244_57ebc801b4a1_sentonly/variant.cs"
         ],
-        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+        "status": "REVIEWED_EXCLUDED_CONTROL_VARIANT",
+        "decision": "GPIO sham or partial-fix arm from A/B experiments; consolidate the real fix into SiLabs_GPIO_3 rather than shipping controls as production models."
       }
     ],
     "limit": "Runtime-loaded copies and sham/diagnostic variants may coexist. These are not all production patches."
@@ -518,14 +535,28 @@
     {
       "item": "BLE supervision/rescan and interval search",
       "source": "mw-emu/scripts/ble_bridge_interval_search.patch and ble_bridge_gate_test/",
-      "status": "NOT_MIGRATED",
-      "reason": "Patch requires an earlier supervision patch; current candidate ConnectionEvent signature differs. Requires original control tests and HEIMAN/IKEA/Tuya clock-variant regression."
+      "status": "MIGRATED_FROM_DEPLOYED_RUNTIME_AND_REGRESSED",
+      "reason": "Recovered missing supervision base from actual deployed binary; retained 26q3 physical RF keys, invalidated stale callbacks with connection generations, restored peer MTU discovery handling. Clock-skew cases are synthetic scheduling tests, not full vendor firmware commissioning.",
+      "commit": "1d04d7da",
+      "source_recovery": "ILSpy 9.1.0.7988 decompilation of deployed Infrastructure.dll plus surviving interval-search patch",
+      "validation": {
+        "source_scheduler_assertions": 23,
+        "compiled_bridge_and_routing_tests": 16,
+        "firmware_control": "Ltech GATT PASS 9.22s"
+      }
     },
     {
       "item": "GPIO3 EXTI alias correction",
       "source": "mw-emu/workspaces/_diagB/57eb_bdiagfix/SiLabsGpio3ExtiFix.cs",
-      "status": "SOURCE_COMPARED_NOT_MIGRATED",
-      "finding": "Current upstream SiLabs_GPIO_3 still initializes targetExternalPins to 0 and indexes previousState by external interrupt channel; local fix uses an unmapped sentinel and per-pin edge state. Device A/B not rerun."
+      "status": "MIGRATED_AND_COMPONENT_REGRESSED",
+      "finding": "Ported sentinel routing, 64 per-pin previous levels, reset clearing, and corrected edge-trigger bit clearing. GPIO unit tests pass; no claim Aqara SPI-NOR is fixed.",
+      "commit": "3fd5c2d5",
+      "validation": {
+        "new_tests": 7,
+        "baseline_failures": 6,
+        "after_failures": 0,
+        "firmware_control": "Ltech GATT PASS 6.63s"
+      }
     },
     {
       "item": "Board/peripheral overlays",
@@ -550,13 +581,13 @@
     },
     {
       "item": "Full runtime image differences",
-      "status": "NOT_EXHAUSTIVELY_RECOVERED",
-      "finding": "mw-emu/renode is a runtime tree without Git history or complete model sources. Artifact inventory cannot prove every compiled local modification is represented."
+      "status": "RECOVERY_IN_PROGRESS",
+      "finding": "Pinned ILSpy installed in ignored output/migration-tools. Actual deployed BLE class recovered, resolving missing patch-1 source. Full binary semantic comparison still incomplete."
     },
     {
       "item": "Commissioning host/container tooling",
       "status": "HISTORICAL_RECIPE_RETAINED_NOT_FULLY_PORTABLE",
-      "finding": "Build image works. Runtime recipe still has hardcoded /home/chen paths and external chip-tool/OTBR dependencies; full rootless commissioning/Thread/Invoke/Read regression pending."
+      "finding": "Pinned connectedhomeip submodule 8bb8a4ff is now checked out and contains FakeBleTransport. Host binaries still need building; rootless commissioning/Thread/Invoke checks remain pending."
     }
   ],
   "excluded_branches": [
@@ -586,5 +617,10 @@
     "SILABS_REBASE_REVIEW.json",
     "src/Infrastructure/SILABS_REBASE_REVIEW.json",
     "tests/peripherals/SiLabs/mailbox_fix_validation_20261102.json"
-  ]
+  ],
+  "latest_checkpoint": {
+    "infrastructure": "1d04d7da865f10569477cbab8298cb36919935d3",
+    "status": "IN_PROGRESS",
+    "all_required_work_complete": false
+  }
 }

@@ -1,0 +1,64 @@
+{
+  "date": "2026-11-02",
+  "status": "LOCAL_MIGRATION_IN_PROGRESS",
+  "infrastructure": "1d04d7da865f10569477cbab8298cb36919935d3",
+  "deployed_baseline_sha256": "ccf47eea9507babb5cff7e59f68c85b20b0ef88929a3e65681df11e35d19bdfe",
+  "GPIO3": {
+    "before": "output/local-migration/gpio3-before.log",
+    "after": "output/local-migration/gpio3-after.log",
+    "cases": 7,
+    "before_failures": 6,
+    "after_failures": 0,
+    "scope": "Compiled GPIO peripheral; synthetic GPIO input edges"
+  },
+  "BLE": {
+    "source_gate": "output/local-migration/ble-gate-source.log",
+    "source_assertions": 23,
+    "compiled": "output/local-migration/ble-compiled.log",
+    "compiled_cases": 16,
+    "scope": "Extracted actual scheduling methods with synthetic clock-skewed peers, plus compiled UDP/PHY/routing/reset tests"
+  },
+  "firmware_controls": {
+    "gpio3-ltech": [
+      {
+        "runtime": "gpio3-candidate",
+        "root": "/home/jchen73/renode-integration",
+        "status": "PASS",
+        "elapsed_seconds": 6.63,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/Ltech/5535/5535_45058_257592_32d68b99c7cd.elf",
+        "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+        "board": "brd2601b",
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "hostmailbox_compensation_enabled": true,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning"
+      }
+    ],
+    "ble-ltech": [
+      {
+        "runtime": "local-migration",
+        "root": "/home/jchen73/renode-integration",
+        "status": "PASS",
+        "elapsed_seconds": 9.22,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/Ltech/5535/5535_45058_257592_32d68b99c7cd.elf",
+        "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+        "board": "brd2601b",
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "hostmailbox_compensation_enabled": true,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning"
+      }
+    ]
+  },
+  "limits": [
+    "Full commissioning and vendor clock-skew firmware scenarios pending",
+    "Board/peripheral overlays and remaining physical model deltas still being migrated",
+    "Old production runtime unchanged"
+  ]
+}

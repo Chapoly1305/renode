@@ -1,0 +1,119 @@
+
+// ConnectionEvent / AbandonConnection / NowMicroseconds below are EXTRACTED VERBATIM
+// from the Patch-2 BleCentralBridge.cs. Everything else is a stub.
+using System;
+using System.Collections.Generic;
+
+class TimeInterval { public ulong Us; public static TimeInterval FromMicroseconds(ulong v){ return new TimeInterval{Us=v}; } }
+enum LogLevel { Warning, Debug, Error }
+class TxItem { public int Llid; public byte[] Payload; }
+class TimeElapsedHolder { public double TotalMicroseconds; }
+class VirtClock { public TimeElapsedHolder TimeElapsed = new TimeElapsedHolder(); }
+
+class Machine {
+    public double Now;
+    public VirtClock ElapsedVirtualTime = new VirtClock();
+    public List<(double at, Action act)> Q = new List<(double, Action)>();
+    public List<ulong> ScheduledDelays = new List<ulong>();
+    public void ScheduleAction(TimeInterval d, Action<TimeInterval> a, string name){
+        ScheduledDelays.Add(d.Us);
+        Q.Add((Now + d.Us, () => a(d)));
+    }
+    public bool Step(){
+        if (Q.Count == 0) return false;
+        int best = 0;
+        for (int i = 1; i < Q.Count; i++) if (Q[i].at < Q[best].at) best = i;
+        var e = Q[best]; Q.RemoveAt(best);
+        Now = e.at; ElapsedVirtualTime.TimeElapsed.TotalMicroseconds = Now;
+        e.act(); return true;
+    }
+}
+
+// A peripheral whose real connection interval is TrueInterval. It re-anchors on any
+// master packet it hears. Window half-width grows 30 us per event since the anchor.
+class Peer {
+    public double TrueInterval;
+    public double Anchor;  public int AnchorEvent;
+    public bool Deaf;
+    public int Hits, Misses;
+    public bool Hear(double txUs, int eventIndex) {
+        if (Deaf) { Misses++; return false; }
+        int k = eventIndex - AnchorEvent;
+        double centre = Anchor + k * TrueInterval;
+        double half = 40 + 30.0 * k;
+        if (Math.Abs(txUs - centre) <= half) { Anchor = txUs; AnchorEvent = eventIndex; Hits++; return true; }
+        Misses++; return false;
+    }
+}
+
+class Bridge {
+    const int AdvertisingChannel37 = 240200;
+    public Machine machine = new Machine();
+    public Peer peer;
+    public List<string> Logs = new List<string>();
+    void Log(LogLevel l, string f, params object[] a){
+        var m = string.Format(f, a); Logs.Add(m);
+        if (AdoptedAtUs < 0 && m.Contains("re-acquired")) AdoptedAtUs = machine.Now;
+    }
+    enum State { Scanning, Connecting, Connected }
+    State state = State.Connected;
+    public int Channel; int lastUnmappedChannel; const byte HopIncrement = 0x07;
+    int NextDataChannel(){ lastUnmappedChannel = (lastUnmappedChannel + HopIncrement) % 37; return lastUnmappedChannel; }
+    static int DataChannelToRf(int c){ return c <= 10 ? c + 1 : c + 2; }
+    byte[] BuildDataPdu(int llid, byte[] p){ return new byte[]{ (byte)llid }; }
+    public int Frames;
+    bool pendingReply;
+    void SendFrame(byte[] p){
+        Frames++;
+        pendingReply = (peer != null && peer.Hear(machine.Now, (int)connEventCounter));
+    }
+    public void DeliverPendingReply(){ if(pendingReply){ pendingReply = false; ProcessDataPdu(); } }
+    readonly object txLock = new object();
+    Queue<TxItem> txQueue = new Queue<TxItem>();
+    static readonly byte[] EmptyPayload = new byte[0];
+    bool lastSentWasData, gattReady, discoveryStarted, connectIndScheduled;
+    byte[] l2capReassembly;
+
+    uint connEventCounter; bool peerAnsweredLastEvent; uint missStreak;
+    uint connectionGeneration; int connectAttempt; bool suppressReconnect;
+    bool searchEngaged, searchEverEngaged;
+    double currentIntervalUs = ConnIntervalMicroseconds;
+    double previousEventIntervalUs = ConnIntervalMicroseconds;
+    double anchorTxUs, lastTxUs; uint anchorEvent; uint searchSweepBase;
+    const uint SupervisionEvents = 34, SearchEngageEvents = 4;
+    const double IntervalTrialStepMicroseconds = 30.0, IntervalTrialCapMicroseconds = 1500.0, MinimumEventDelayMicroseconds = 100.0;
+    const ulong ConnIntervalMicroseconds = 30000, Anchor0DelayMicroseconds = 1650;
+
+    public uint MissStreak => missStreak;
+    public bool Scanning => state == State.Scanning;
+    public bool EverEngaged => searchEverEngaged;
+    public double AdoptedInterval => currentIntervalUs;
+    public int Abandons;
+    public double AdoptedAtUs = -1;
+
+@@EXTRACTED@@
+
+    public void ProcessDataPdu(){
+            peerAnsweredLastEvent = true;
+            connectAttempt = 0;
+            if(connEventCounter > 0)
+            {
+                anchorTxUs = lastTxUs;
+                anchorEvent = connEventCounter - 1;
+            }
+    }
+
+    public int Connections;
+    public void StartConnection(Peer p){
+        Connections++;
+        peer = p; state = State.Connected;
+        connEventCounter = 0; missStreak = 0; peerAnsweredLastEvent = false;
+        searchEngaged = false;
+        previousEventIntervalUs = currentIntervalUs;
+        anchorEvent = 0; anchorTxUs = NowMicroseconds() + Anchor0DelayMicroseconds;
+        peer.Anchor = anchorTxUs; peer.AnchorEvent = 0;
+        connectionGeneration++;
+        var generation = connectionGeneration;
+        machine.ScheduleAction(TimeInterval.FromMicroseconds(Anchor0DelayMicroseconds), _ => ConnectionEvent(generation, currentIntervalUs), "anchor0");
+    }
+}

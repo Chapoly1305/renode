@@ -6,7 +6,7 @@
   "branch": "integration/stock-ble-on-silabs-26q3",
   "status": "BOOT_TO_GATT_PASS_WITH_EXPLICIT_COMPENSATION_PENDING_COMMISSIONING",
   "method": "Rebase the 21 commits after Silicon Labs 26q1 onto 26q3; resolve every historical Infrastructure bump to the separately ported candidate rather than reinstalling old model commits.",
-  "infrastructure": "080b831ec538f0426cc8620fa324f46a4a525758",
+  "infrastructure": "1d04d7da865f10569477cbab8298cb36919935d3",
   "tlib": "43a51de2aa1b05fdfd2073681b9b027af555422c",
   "resources_for_validation": "9d7824771f3db67663950cae06f5bb7f89fbf33b",
   "retained": [
@@ -121,5 +121,6 @@
   },
   "hash_regression_report": "tests/peripherals/SiLabs/symcrypto_hash_validation_20261102.json",
   "performance_report": "tests/peripherals/SiLabs/performance_validation_20261102.json",
-  "additional_SHA256_descriptor_checks_passed": 6
+  "additional_SHA256_descriptor_checks_passed": 6,
+  "local_migration_checkpoint": "tests/peripherals/SiLabs/local_migration_validation_20261102.json"
 }
