@@ -23,9 +23,11 @@ The build uses local image tags and does not publish a container image.
 
 The default device profile is `brd2601b` with its application vector at
 `0x08006000`. Use `--platform matter/renode-thread/overlays/brd2601b_mg24a.repl`
-for the tested LG MG24A sample. Other inputs may require another platform,
-`--load-base`, `--passcode` or `--discriminator`. Selecting a profile does not
-establish the physical device identity.
+for the tested LG MG24A sample. An additive `--overlay <relative.repl>`
+is merged with `--platform` before devices are instantiated (needed for some
+historical boards). Other inputs may require `--load-base`, `--passcode` or
+`--discriminator`; the defaults are test credentials, not recovered secrets.
+Selecting a profile does not establish the physical device identity.
 
 Each test creates and removes its own container and internal network. Ports
 remain inside that container. OTBR needs `NET_ADMIN` and `/dev/net/tun` in its
@@ -33,10 +35,17 @@ container's network namespace; the runner supplies them without host networking
 or `--privileged`. The host Docker socket is not mounted into the container.
 The runner does not kill other processes or remove controller files on the host.
 
-`results.json` and the logs are written under `--output`. `FULL_PASS` requires
-CommissioningComplete, successful Read/Toggle/Read commands and an observed
-OnOff state change. `--pase-only` tests the initial secure BLE pairing without
-OTBR or its network grants. Hostmailbox compensation and 90-second BTP timeout
+`results.json` and per-command logs are written under `--output`. `--pase-only`
+keeps one interactive chip-tool process alive after BLE PASE to read runtime
+BasicInformation.SpecificationVersion/SoftwareVersion and Descriptor evidence,
+without OTBR, Thread/CASE commissioning, or its network grants. The legacy
+`PASE_PASS` status now requires these reads; a pairing marker alone fails. In the full
+flow, `FULL_PASS` requires successful commissioning, BasicInformation/Descriptor
+reads, a Descriptor-discovered OnOff server and an observed Read/Toggle/Read
+state change on its discovered endpoint. `FULL_READ_PASS` means commissioning
+and reads succeeded but OnOff is not applicable (or CLI-only operational checks
+were not run): it makes no OnOff-control claim. The runner limits Docker memory
+to 3g. Hostmailbox compensation, attestation bypass and 90-second BTP timeout
 overrides are explicit test-environment settings, not physical timing claims.
 
 ## Historical runtime-only environment

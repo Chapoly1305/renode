@@ -37,6 +37,6 @@ case "${1:-help}" in
             --bundled-image "$stock_image" "$@"
         ;;
     *)
-        printf '%s\n' 'Usage: docker/stock.sh prepare | build | commission --elf FILE --output DIR [--platform RELATIVE.repl]'
+        printf '%s\n' 'Usage: docker/stock.sh prepare | build | commission --elf FILE --output DIR [--platform RELATIVE.repl] [--overlay RELATIVE.repl] [--pase-only]'
         ;;
 esac
