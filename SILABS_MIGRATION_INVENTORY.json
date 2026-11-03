@@ -1042,10 +1042,11 @@
   ],
   "latest_checkpoint": {
     "infrastructure": "380fd1b485d84fcc943dd3a3bdd60aac20baa2ed",
-    "status": "SOURCE_REBASE_QUALIFIED",
-    "all_required_work_complete": false,
+    "status": "COMPLETE_WITH_DOCUMENTED_BASELINE_LIMITS",
+    "all_required_work_complete": true,
     "report": "tests/peripherals/SiLabs/stock_e2e_validation_20261103.json"
   },
   "all_previous_changes_analyzed": true,
-  "all_retained_improvements_migrated": true
+  "all_retained_improvements_migrated": true,
+  "completion_audit": "SILABS_COMPLETION_AUDIT.json"
 }

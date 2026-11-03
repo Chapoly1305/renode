@@ -1,0 +1,143 @@
+{
+  "date_utc": "2026-11-03",
+  "objective": "做完rebase的工作",
+  "status": "COMPLETE_WITH_DOCUMENTED_BASELINE_LIMITS",
+  "qualified_source_commit": "4d046b5cdad71531e3b6d1442d7b6ef9e14a2c82",
+  "tested_clean_source_commit": "deb4cd2fa85b057538597a27fbf7e0580e94c303",
+  "image_id": "sha256:ecdd345ac7d71485ef226f89fd850512c8dcbf24e06155cb742635ec3f04ab74",
+  "requirements": [
+    {
+      "item": "Rebase onto Silicon Labs 26q3 without restoring the 26q1 core",
+      "verified": true,
+      "evidence": "Root 61d8ed59, Infrastructure 3bfa03fa and tlib 43a51de2 are ancestors of the candidate. Fresh source build succeeds."
+    },
+    {
+      "item": "Analyze and migrate the original Git delta",
+      "verified": true,
+      "evidence": "All 21 main mappings remain in branch history; six Infrastructure deltas have explicit retain/upstream-replacement decisions in SILABS_REBASE_REVIEW.json."
+    },
+    {
+      "item": "Account for all inventoried local source and board changes",
+      "verified": true,
+      "evidence": "All 17 unique C# variants and 51 overlay-related files have explicit dispositions. 47 migrated profiles load and compiled bus/clock/identity contracts pass. Retained physical fixes are central models; experimental controls have explicit exclusions. All 68 originals are hash-verified in the private materials backup."
+    },
+    {
+      "item": "Recover and preserve lab dependencies and dirty improvements",
+      "verified": true,
+      "evidence": "Original lab source and working patches are on two archive branches. Top-level OT 21c9cdd and distinct OTBR OT c6ec3c79 are published separately; OTBR 08d546a is preserved. SDK PASE/timeout changes retained and timeout parsing hardened with two unit tests."
+    },
+    {
+      "item": "Preserve the MG21 platform and CPU work",
+      "verified": true,
+      "evidence": "DeviceFamily, opt-in HFXO, platform and constrained MOV.W SP port pass component/ISA checks. The real HS1SA reset assertion is UDF #0x42 at 0x77bc, explicitly recorded by the historical experiment; stable vendor boot was already limited by bootloader/SE support."
+    },
+    {
+      "item": "Complete appropriate component and real-firmware regression",
+      "verified": true,
+      "evidence": "Existing crypto, BLE, mailbox, UART, GPIO, I2C, clocks, NOR, RNG, CPU and overlay reports retained. SEMAILBOX1 TXINT/multiword/reset five tests pass. Final audit fixed RF shadow/Storage0 reset: three baseline failures, six corrected tests, ten hostmailbox controls. Final bundled Ltech and LG complete native UDP CASE and Read/Toggle/Read with state changes."
+    },
+    {
+      "item": "Make the configuration reusable through rootless containers",
+      "verified": true,
+      "evidence": "A clean GitHub checkout builds all five host tools and Renode using docker/stock.sh build. Last pipeline exits 0 with Build succeeded, zero warnings/errors, SDK tests pass. Image needs only ELF/evidence mounts. Docker save/load tested; no host network or Docker socket mount."
+    },
+    {
+      "item": "Commit/push and preserve the requested materials on the user GitHub",
+      "verified": true,
+      "evidence": "Nine qualified branch heads match remote SHAs. Private Release payload and provenance digests match GitHub SHA256 values. Final audit publication is a documentation commit on the same branch."
+    }
+  ],
+  "component_evidence": [
+    "tests/peripherals/SiLabs/local_migration_validation_20261102.json",
+    "tests/peripherals/SiLabs/overlay_migration_validation_20261102.json",
+    "tests/peripherals/SiLabs/mailbox_fix_validation_20261102.json",
+    "tests/peripherals/SiLabs/symcrypto_hash_validation_20261102.json",
+    "tests/peripherals/SiLabs/performance_validation_20261102.json",
+    "tests/peripherals/SiLabs/stock_e2e_validation_20261103.json"
+  ],
+  "private_release": "https://github.com/Chapoly1305/MatterOverwatch-SuperAgent/releases/tag/untagged-bffaf78054166b1e91da",
+  "verified_payloads": [
+    {
+      "name": "renode-stock-26q3-linux-amd64.docker.tar.gz",
+      "bytes": 217466846,
+      "sha256": "2f76dd6cab73267330177ee20d45016575c9e417642f8c4612e2ca66e06e1c5c",
+      "github_digest_matches": true
+    },
+    {
+      "name": "renode-26q3-source-e2e-materials-20261103.tar.gz",
+      "bytes": 6269908,
+      "sha256": "27f19e020ee32c7d07031b02b12bfad86769782c78d16102e7b315824bc5e3e3",
+      "github_digest_matches": true
+    },
+    {
+      "name": "SOURCE_E2E_PROVENANCE.json",
+      "bytes": 8749,
+      "sha256": "8b4c7a4d097ac58e800ae4cb60c296a449a1b90c5a4bddef95b6b234da816d4d",
+      "github_digest_matches": true
+    }
+  ],
+  "verified_qualified_refs": [
+    {
+      "repository": "Chapoly1305/renode",
+      "branch": "integration/stock-ble-on-silabs-26q3",
+      "commit": "4d046b5cdad71531e3b6d1442d7b6ef9e14a2c82",
+      "verified": true
+    },
+    {
+      "repository": "Chapoly1305/renode-infrastructure",
+      "branch": "integration/stock-ble-on-silabs-26q3",
+      "commit": "380fd1b485d84fcc943dd3a3bdd60aac20baa2ed",
+      "verified": true
+    },
+    {
+      "repository": "Chapoly1305/tlib",
+      "branch": "integration/stock-ble-on-silabs-26q3",
+      "commit": "c04d273709cfe8e604233199dc54f638210c9eb5",
+      "verified": true
+    },
+    {
+      "repository": "Chapoly1305/connectedhomeip",
+      "branch": "integration/renode-26q3",
+      "commit": "4b82451ee229cd66e54cce8b2681bad4045b8a0f",
+      "verified": true
+    },
+    {
+      "repository": "Chapoly1305/openthread",
+      "branch": "renode/mle-fast-attach",
+      "commit": "21c9cdd484a531d126758fa02e4343eb587f17fb",
+      "verified": true
+    },
+    {
+      "repository": "Chapoly1305/openthread",
+      "branch": "renode/otbr-fast-attach",
+      "commit": "c6ec3c797ec2cb9d273a7a9d5abcb65c2e6b9096",
+      "verified": true
+    },
+    {
+      "repository": "Chapoly1305/ot-br-posix",
+      "branch": "renode/mle-fast-attach",
+      "commit": "76e9c38a4e5faae911c6beb76374a0cee83c77de",
+      "verified": true
+    },
+    {
+      "repository": "Chapoly1305/renode-infrastructure",
+      "branch": "archive/lab-runtime-20261103",
+      "commit": "3bc39b9a9deb389905f02e5f6a331ee0c0bcd933",
+      "verified": true
+    },
+    {
+      "repository": "Chapoly1305/connectedhomeip",
+      "branch": "archive/lab-host-sdk-20261103",
+      "commit": "0e8b8c4eb002772aed450f0a098a2d51f6b2a87d",
+      "verified": true
+    }
+  ],
+  "legacy_limits": [
+    "Quectel ThreadNetworkEnable timeout reproduced on the existing runtime.",
+    "MG21 HS1SA intentional UDF #0x42 at 0x77bc matches the historical experimental limit; stable vendor boot is not qualified.",
+    "Hostmailbox, Storage0, ACK and MLE/RA host timing compensation remain simulation settings.",
+    "Exact old DLL build provenance and original runtime-loaded LG subclass source are unavailable.",
+    "Existing production runtime is not replaced."
+  ],
+  "validation_scope": "Retained source and compatibility contracts are migrated and tested. Deliberate diagnostic exclusions, physical timing/power fidelity, broad vendor coverage and old-DLL build provenance remain explicit limitations; this does not claim every vendor firmware fully boots or commissions."
+}

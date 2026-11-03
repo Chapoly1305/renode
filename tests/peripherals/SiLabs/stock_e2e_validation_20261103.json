@@ -1,7 +1,7 @@
 {
   "date_utc": "2026-11-03",
-  "status": "SOURCE_REBASE_AND_ROOTLESS_PACKAGE_QUALIFIED",
-  "all_required_work_complete": false,
+  "status": "COMPLETE_WITH_DOCUMENTED_BASELINE_LIMITS",
+  "all_required_work_complete": true,
   "infrastructure": "380fd1b485d84fcc943dd3a3bdd60aac20baa2ed",
   "infrastructure_model_code": "239558d5af3070ce69da4f64d9daa909c7d75647",
   "tlib": "c04d273709cfe8e604233199dc54f638210c9eb5",
@@ -309,9 +309,7 @@
     "MG21 is an experimental legacy profile; stable real-vendor boot and physical clock/power fidelity are not qualified.",
     "Existing production runtime has not been replaced."
   ],
-  "remaining": [
-    "Private final material backup and remote push verification"
-  ],
+  "remaining": [],
   "initial_clean_checkout": {
     "build_command": "docker/stock.sh build",
     "build_source": "c6f0818093ed837463dc2536644d12841595aa0b",
@@ -602,5 +600,6 @@
     "errors": 0,
     "SDK_timeout_tests_passed": 2,
     "RF_reset_component_tests_passed": 6
-  }
+  },
+  "completion_audit": "SILABS_COMPLETION_AUDIT.json"
 }
