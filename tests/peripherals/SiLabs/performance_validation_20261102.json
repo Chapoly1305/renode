@@ -1,0 +1,102 @@
+{
+  "scope": "Same uninstrumented Ltech ELF d69b8da3, SDK container, seed 0x2603, 100us quantum, serial execution, 39 MIPS per core, immediate virtual advancement; post-boot BLE only, no chip-tool/Thread traffic. Existing runtime binaries copied to isolated writable directory for pyrenode native-library symlinks; existing runtime unchanged.",
+  "rounds": {
+    "initial": {
+      "runtime-control": {
+        "median_wall_seconds_per_virtual_second": 2.6947069090092555,
+        "median_cpu_seconds_per_virtual_second": 2.7655025700000007,
+        "wall_range": [
+          1.9841827270574868,
+          2.7985313409008086
+        ],
+        "gatt_ready": true
+      },
+      "candidate": {
+        "median_wall_seconds_per_virtual_second": 1.4280423659365624,
+        "median_cpu_seconds_per_virtual_second": 2.6558331509999995,
+        "wall_range": [
+          1.2519689470063895,
+          1.7729083580197766
+        ],
+        "gatt_ready": true
+      }
+    },
+    "confirmation": {
+      "runtime-control": {
+        "median_wall_seconds_per_virtual_second": 6.136854476062581,
+        "median_cpu_seconds_per_virtual_second": 6.632385283000001,
+        "wall_range": [
+          3.839244919945486,
+          6.265326786087826
+        ],
+        "gatt_ready": true
+      },
+      "candidate": {
+        "median_wall_seconds_per_virtual_second": 1.9390781299443915,
+        "median_cpu_seconds_per_virtual_second": 3.023722745999999,
+        "wall_range": [
+          1.4341349269961938,
+          2.0427076519699767
+        ],
+        "gatt_ready": true
+      }
+    }
+  },
+  "limits": [
+    "Three one-second post-warmup samples per runtime per round; noisy shared host, no CPU isolation.",
+    "Round 1 uses default .NET tiering; confirmation runs in reverse order with DOTNET_TieredCompilation=0.",
+    "Does not measure full commissioning/Thread/Invoke, memory use or broad firmware corpus."
+  ],
+  "date": "2026-11-02",
+  "conclusion": "No slowdown observed in these short BLE-only runs; noisy shared-host measurements do not establish a stable speedup factor.",
+  "script": "tests/peripherals/SiLabs/stock_performance.py",
+  "portable_script_validation": {
+    "seed": "0x2603",
+    "quantum_microseconds": 100,
+    "cpu_mips_each": 39,
+    "advance_immediately": true,
+    "serial_execution": true,
+    "gatt_ready": true,
+    "hostmailbox_compensation": true,
+    "tiered_compilation_env": "0",
+    "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+    "records": [
+      {
+        "sample": 0,
+        "virtual_seconds": 1,
+        "wall_seconds": 2.1351210940629244,
+        "cpu_seconds": 2.620688621,
+        "virtual_per_wall": 0.46835751039164664,
+        "phase": "boot_and_warmup"
+      },
+      {
+        "sample": 1,
+        "virtual_seconds": 1,
+        "wall_seconds": 1.5329265500186011,
+        "cpu_seconds": 2.3053752900000006,
+        "virtual_per_wall": 0.6523469764339757,
+        "phase": "post_boot_ble"
+      },
+      {
+        "sample": 2,
+        "virtual_seconds": 1,
+        "wall_seconds": 1.7891549179330468,
+        "cpu_seconds": 2.7605991219999986,
+        "virtual_per_wall": 0.5589230926717447,
+        "phase": "post_boot_ble"
+      },
+      {
+        "sample": 3,
+        "virtual_seconds": 1,
+        "wall_seconds": 1.4466839920496568,
+        "cpu_seconds": 2.2981296869999994,
+        "virtual_per_wall": 0.6912359613402533,
+        "phase": "post_boot_ble"
+      }
+    ],
+    "scope": "Boot and BLE polling only; normal warning logging retained"
+  },
+  "example_command": ".venv/bin/python tests/peripherals/SiLabs/stock_performance.py --elf /firmware/device.elf --output output/performance.json --hostmailbox-compensation",
+  "control_instructions": "Use the same script/image/firmware with PYRENODE_PATH pointing to the old runtime; omit --hostmailbox-compensation for the old runtime which already contains its local compensation. Compare matching tiering settings only.",
+  "raw_artifacts": "output/performance-26q3/ (local ignored files)"
+}

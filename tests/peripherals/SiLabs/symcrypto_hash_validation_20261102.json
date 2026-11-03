@@ -1,0 +1,77 @@
+{
+  "scope": "Six descriptor-level regression layouts corresponding to the prior SHA256 report; deterministic inputs generated here, not a rerun of the original SDK firmware probe. Existing SYMCRYPTO suite also executed by import.",
+  "results": [
+    {
+      "case": "multi100",
+      "length": 100,
+      "logical_update_sizes": [
+        64,
+        36
+      ],
+      "expected": "c5ff42b081eb6c97d611d3945dcc414fb58344f4a0b52b4a1ef996ce3469c303",
+      "actual": "c5ff42b081eb6c97d611d3945dcc414fb58344f4a0b52b4a1ef996ce3469c303",
+      "passed": true
+    },
+    {
+      "case": "single60",
+      "length": 60,
+      "logical_update_sizes": [
+        60
+      ],
+      "expected": "c0bf8abedc00673807909c7480a686f7b81a51eec35cea1dfadea5a196c3521b",
+      "actual": "c0bf8abedc00673807909c7480a686f7b81a51eec35cea1dfadea5a196c3521b",
+      "passed": true
+    },
+    {
+      "case": "three100",
+      "length": 100,
+      "logical_update_sizes": [
+        40,
+        40,
+        20
+      ],
+      "expected": "c5ff42b081eb6c97d611d3945dcc414fb58344f4a0b52b4a1ef996ce3469c303",
+      "actual": "c5ff42b081eb6c97d611d3945dcc414fb58344f4a0b52b4a1ef996ce3469c303",
+      "passed": true
+    },
+    {
+      "case": "c200",
+      "length": 200,
+      "logical_update_sizes": [
+        100,
+        100
+      ],
+      "expected": "89e6b5d942e7f3de531520f99b3fdf8646aee5a9aa754954a0fb6f02f9e9cbd8",
+      "actual": "89e6b5d942e7f3de531520f99b3fdf8646aee5a9aa754954a0fb6f02f9e9cbd8",
+      "passed": true
+    },
+    {
+      "case": "midlead80",
+      "length": 40,
+      "logical_update_sizes": [
+        20,
+        20
+      ],
+      "expected": "be324e4de642f69a8470e72f303b0fd6d8897150f9aee16256519949649d5f7e",
+      "actual": "be324e4de642f69a8470e72f303b0fd6d8897150f9aee16256519949649d5f7e",
+      "passed": true
+    },
+    {
+      "case": "one80",
+      "length": 1,
+      "descriptor_length": 4,
+      "InvalidBytesOrBits": 3,
+      "expected": "76be8b528d0075f7aae98d6fa57a6d3c83ae480a8469e668d7b0af968995ac71",
+      "actual": "76be8b528d0075f7aae98d6fa57a6d3c83ae480a8469e668d7b0af968995ac71",
+      "passed": true
+    }
+  ],
+  "source_infrastructure": "9a31822582793470e7af48f792ebea90ed3fbba6",
+  "issue": "https://github.com/SiliconLabsSoftware/renode-infrastructure/pull/2",
+  "maintainer_confirmation": "https://github.com/SiliconLabsSoftware/renode-infrastructure/pull/2#issuecomment-5544312065",
+  "integration": "PR remains open/unmerged; the inherited 26q3 hash implementation handles these defects independently.",
+  "script": "tests/peripherals/SiLabs/SYMCRYPTO_sha256_regression.py",
+  "reproduce": "Run the script from the repository root in the prepared build image with RENODE_BASE_PATH=/work PYRENODE_PATH=/work PYRENODE_RUNTIME=coreclr.",
+  "passed": 6,
+  "original_sdk_firmware_probe_replayed": false
+}
