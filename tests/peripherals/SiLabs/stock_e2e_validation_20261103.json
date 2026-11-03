@@ -1,9 +1,9 @@
 {
   "date_utc": "2026-11-03",
-  "status": "FULL_STOCK_E2E_PASS_CLEAN_REBUILD_PENDING",
+  "status": "RF_RESET_COMPONENT_PASS_FINAL_IMAGE_REPLAY_PENDING",
   "all_required_work_complete": false,
-  "infrastructure": "03fbfb64f5195bd960c92ab79687baf672d5f2f3",
-  "infrastructure_model_code": "32dd8806a8b5186d33175fa0789689b297e9c623",
+  "infrastructure": "e9dcc57bc1b577008dded33c864f20892c0d2430",
+  "infrastructure_model_code": "239558d5af3070ce69da4f64d9daa909c7d75647",
   "tlib": "c04d273709cfe8e604233199dc54f638210c9eb5",
   "sdk": "4b82451ee229cd66e54cce8b2681bad4045b8a0f",
   "host_sources": {
@@ -309,7 +309,143 @@
     "Existing production runtime has not been replaced."
   ],
   "remaining": [
-    "Clean checkout preparation/build/image reproduction",
-    "Final source/feature inventory audit, commit and private artifact backup"
-  ]
+    "Final image packet replay after RF reset correction",
+    "Final inventory audit, commit and private artifact backup"
+  ],
+  "initial_clean_checkout": {
+    "build_command": "docker/stock.sh build",
+    "build_source": "c6f0818093ed837463dc2536644d12841595aa0b",
+    "packaging_source": "973e260a",
+    "Renode_Build_succeeded_observed": true,
+    "pipeline_exit_code": 0,
+    "BLE_timeout_unit_tests_passed": 2,
+    "old_lab_tools_or_mounted_runtime_required": false
+  },
+  "initial_cold_image_controls": {
+    "cold-bundled-ltech": {
+      "status": "FULL_PASS",
+      "elapsed_seconds": 42.09,
+      "pairing_returncode": 0,
+      "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+      "chip_tool_sha256": "a8ed7c5abca84d18f5167076f3d392e2b4ede147f2b331bd50289494df6e3533",
+      "platform": "platforms/boards/silabs/brd2601b.repl",
+      "PASE_established": true,
+      "network_enable_started": true,
+      "network_enable_completed": true,
+      "UDP_CASE_Sigma2_received": true,
+      "hostmailbox_compensation": "on",
+      "BTP_timeout_overrides_ms": 90000,
+      "pase_only": false,
+      "thread_host": "OTBR",
+      "operational": {
+        "read_before": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "read",
+            "on-off",
+            "1",
+            "1"
+          ]
+        },
+        "invoke_toggle": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "toggle",
+            "1",
+            "1"
+          ]
+        },
+        "read_after": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "read",
+            "on-off",
+            "1",
+            "1"
+          ]
+        }
+      },
+      "image": "local/renode-stock:26q3",
+      "commissioning_verified": true,
+      "onoff_before": [
+        "TRUE"
+      ],
+      "onoff_after": [
+        "FALSE"
+      ],
+      "operational_verified": true,
+      "scope": "Unmodified firmware, native chip-tool, real OTBR/TUN and UDP CASE. FULL_PASS requires successful commissioning plus Read/Toggle/Read with an observed state change. Hostmailbox and timeout compensation remain explicit."
+    },
+    "cold-bundled-lg": {
+      "status": "FULL_PASS",
+      "elapsed_seconds": 44.6,
+      "pairing_returncode": 0,
+      "elf_sha256": "9736771a0e3a15fb01804d6435854379374c704a67ceb9e1e518b045c725e24f",
+      "chip_tool_sha256": "a8ed7c5abca84d18f5167076f3d392e2b4ede147f2b331bd50289494df6e3533",
+      "platform": "matter/renode-thread/overlays/brd2601b_mg24a.repl",
+      "PASE_established": true,
+      "network_enable_started": true,
+      "network_enable_completed": true,
+      "UDP_CASE_Sigma2_received": true,
+      "hostmailbox_compensation": "on",
+      "BTP_timeout_overrides_ms": 90000,
+      "pase_only": false,
+      "thread_host": "OTBR",
+      "operational": {
+        "read_before": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "read",
+            "on-off",
+            "1",
+            "1"
+          ]
+        },
+        "invoke_toggle": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "toggle",
+            "1",
+            "1"
+          ]
+        },
+        "read_after": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "read",
+            "on-off",
+            "1",
+            "1"
+          ]
+        }
+      },
+      "image": "local/renode-stock:26q3",
+      "commissioning_verified": true,
+      "onoff_before": [
+        "FALSE"
+      ],
+      "onoff_after": [
+        "TRUE"
+      ],
+      "operational_verified": true,
+      "scope": "Unmodified firmware, native chip-tool, real OTBR/TUN and UDP CASE. FULL_PASS requires successful commissioning plus Read/Toggle/Read with an observed state change. Hostmailbox and timeout compensation remain explicit."
+    }
+  },
+  "rf_reset_follow_up": {
+    "model_code_commit": "239558d5",
+    "methods": 6,
+    "baseline_failures": 3,
+    "after_failures": 0,
+    "hostmailbox_control_methods_passed": 10,
+    "main_rebuild": "PASS: ./build.sh --skip-fetch; 0 warnings, 0 errors, 33.55s MSBuild",
+    "baseline_log": "output/local-migration/lpw-reset-baseline-valid.log",
+    "fixed_log": "output/local-migration/lpw-reset-after.log",
+    "scope": "Reset shadow fallback values and Storage0 poll history; preserve modeled read-only fields and secure/nonsecure aliases. This is compatibility behavior, not physical silicon fidelity."
+  }
 }

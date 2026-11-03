@@ -4,9 +4,9 @@
   "old_branch": "matter-emulated-commissioning",
   "old_tip": "9d2707317030cd739f467f472bfe805a391265db",
   "branch": "integration/stock-ble-on-silabs-26q3",
-  "status": "FULL_STOCK_E2E_PASS_CLEAN_REBUILD_PENDING",
+  "status": "RF_RESET_COMPONENT_PASS_FINAL_IMAGE_REPLAY_PENDING",
   "method": "Rebase the 21 commits after Silicon Labs 26q1 onto 26q3; resolve every historical Infrastructure bump to the separately ported candidate rather than reinstalling old model commits.",
-  "infrastructure": "03fbfb64f5195bd960c92ab79687baf672d5f2f3",
+  "infrastructure": "e9dcc57bc1b577008dded33c864f20892c0d2430",
   "tlib": "c04d273709cfe8e604233199dc54f638210c9eb5",
   "resources_for_validation": "9d7824771f3db67663950cae06f5bb7f89fbf33b",
   "retained": [
