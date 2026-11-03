@@ -6,7 +6,7 @@
   "branch": "integration/stock-ble-on-silabs-26q3",
   "status": "BOOT_TO_GATT_PASS_WITH_EXPLICIT_COMPENSATION_PENDING_COMMISSIONING",
   "method": "Rebase the 21 commits after Silicon Labs 26q1 onto 26q3; resolve every historical Infrastructure bump to the separately ported candidate rather than reinstalling old model commits.",
-  "infrastructure": "9a31822582793470e7af48f792ebea90ed3fbba6",
+  "infrastructure": "080b831ec538f0426cc8620fa324f46a4a525758",
   "tlib": "43a51de2aa1b05fdfd2073681b9b027af555422c",
   "resources_for_validation": "9d7824771f3db67663950cae06f5bb7f89fbf33b",
   "retained": [
@@ -107,5 +107,19 @@
     "Guarded opt-in hostmailbox compensation with negative tests",
     "Both wireless bridges now use upstream frequency/10kHz medium routing keys; UDP retains Thread channel numbers",
     "Stock Matter scenario explicitly enables the compensation"
-  ]
+  ],
+  "migration_coverage": {
+    "all_historical_changes_analyzed_and_migrated": false,
+    "selected_GitHub_delta_accounted_for": true,
+    "selected_commits": {
+      "renode": 21,
+      "infrastructure": 6
+    },
+    "local_artifacts": "51 overlay-related files and 17 unique C# workspace variants inventoried; per-file semantic migration is incomplete",
+    "inventory": "SILABS_MIGRATION_INVENTORY.json",
+    "validation_incomplete": "Full commissioning/Thread/CASE/Invoke/Read and broad vendor corpus not validated"
+  },
+  "hash_regression_report": "tests/peripherals/SiLabs/symcrypto_hash_validation_20261102.json",
+  "performance_report": "tests/peripherals/SiLabs/performance_validation_20261102.json",
+  "additional_SHA256_descriptor_checks_passed": 6
 }

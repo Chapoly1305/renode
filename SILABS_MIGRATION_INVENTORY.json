@@ -1,0 +1,590 @@
+{
+  "date": "2026-11-02",
+  "all_previous_changes_migrated": false,
+  "scope_statement": "Selected GitHub fork delta is accounted for; inventory of local artifacts is not a completed semantic review or migration of the local runtime.",
+  "completed": [
+    {
+      "scope": "Renode matter-emulated-commissioning",
+      "original_commits": 21,
+      "disposition": "Rebased with gitlink/API adaptation; full map in SILABS_COMMIT_MAP.json",
+      "validation": "Build, board/GATT checks; historical commissioning scripts retained but not revalidated end-to-end"
+    },
+    {
+      "scope": "Infrastructure stock-firmware-ble-central",
+      "original_commits": 6,
+      "disposition": "Reviewed per commit; retained features adapted, overlapping SecureElement/PROTIMER behaviour uses upstream implementations",
+      "details": "src/Infrastructure/SILABS_REBASE_REVIEW.json"
+    },
+    {
+      "scope": "Local hostmailbox deadlock patch",
+      "disposition": "Ported with explicit opt-in, stricter guards and activation counter; synthetic guard tests and two production GATT controls pass"
+    },
+    {
+      "scope": "SHA256 sibling branch / upstream PR #2",
+      "disposition": "Upstream implementation supersedes old patch; original PR not merged. Six equivalent descriptor scenarios pass hashlib comparison, not the original SDK firmware probe",
+      "report": "tests/peripherals/SiLabs/symcrypto_hash_validation_20261102.json"
+    },
+    {
+      "scope": "26q3 medium routing API",
+      "disposition": "Both bridges use RF/10kHz keys; Thread UDP still uses channel 11..26; actual-radio SYNTH key tests pass"
+    }
+  ],
+  "local_overlays": {
+    "root": "mw-emu/scripts/renode_overlays",
+    "files": 51,
+    "entries": [
+      {
+        "path": "scripts/renode_overlays/AUDIT.md",
+        "sha256": "422c0a00f8f53d34afa8c91859229d403c7cdd6110a9d47aa1b03eabe66e1bc1",
+        "status": "PROVENANCE_DOCUMENT",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/README.md",
+        "sha256": "11b3e0894a0f68e377a0ec44779ffac2c391d39e1d87c07711005fad82cebcb9",
+        "status": "PROVENANCE_DOCUMENT",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/adc0_sixg301.repl",
+        "sha256": "7c60a83bb06c72c7a1d0fde0132873e4fa21f8b9aa6bda7462bd2bf994a7cdad",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/aqara_smu.repl",
+        "sha256": "71f6e46471d691dffd538d9daca8c1c6a402ee67d6bcb733042e99359971e2bc",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd1019a_s3tz.repl",
+        "sha256": "f89cdef8dde58cb36413b4c4923d36ac2ba4622fd458e9324fe3a7b81eabde7c",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_38m4.repl",
+        "sha256": "08261a4b14683c3b2dcdf2e7f9768ed9577278e59e1bd7466238cf653cb85c3d",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_40m.repl",
+        "sha256": "e24b4e1ef693ba00f26a101f1da858b1bbbedfbbc8869be1d59fa16fcee0766e",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_hp20.repl",
+        "sha256": "7577f447fe576ea09f26efcc57b63f572235d028197f3f99cd561d684f51fe25",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_hp20_38m4.repl",
+        "sha256": "2f3c3de731eac04879b5d7977600edd02cdeddaa43e5873bd0b6e1cded8f468a",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_hp20_40m.repl",
+        "sha256": "122352740da0404e8e58b4f50155e4dcec7ee55dda9a59cf1f3286bf7525a676",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_mg24a.repl",
+        "sha256": "a4b03f6563533ae2a7861b829f73c60d96fd79b8461c2a41d14348b686325c3c",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_mg24a_38m4.repl",
+        "sha256": "87bb842ee7f620cc20fa2adad83ea029e8be996e3c4d889f17f1ddb2304e8837",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_mg24a_38m4_iadc.repl",
+        "sha256": "6a9346ed70ee7915efae465647331b60c4b69583d38592a54b84154344c0dbd9",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_mg24a_40m.repl",
+        "sha256": "8a1a2a284951c6c43b762327426519916bd9dd6dadca6e1ee3411ae758fb7f65",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_mg24a_burtc.repl",
+        "sha256": "d43a0c104376f62e442cc8bb83cf562f8c8456886b2bbbe011dd8d87aac5fbc0",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_mg24a_burtc_38m4.repl",
+        "sha256": "42f50fa18bb5dc892b31c470a7ab28442058b7ecd6dcc66e7eb4177ce65db93c",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_mg24a_burtc_i2cxg2.repl",
+        "sha256": "fef8931e4fdcff850ddedab5c0e58ae0c25dc4e1abfc194ebd8ceafc53e87dd9",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_mg24a_burtc_i2cxg2_38m4.repl",
+        "sha256": "631b4b17defd90cdbb37e685d1c6625d425acd9c2d0fea7ab8ba79f6064eaa04",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_mg24a_burtc_i2cxg2_extflash.repl",
+        "sha256": "b18b8444f82ec74a172a55bf1fc5c56175f3622aae3c281f2d6c0c4b2efdf298",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_mg24a_hp20.repl",
+        "sha256": "ba7fc82376621e0cfc86e2a583a0a3d77649f14280384258dc3c08eace947ecc",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_mg24a_hp20_38m4.repl",
+        "sha256": "521a68fba0cf1b51252d326ea3a451a0683bf636bcca86d5d6d2f37feb483b78",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_mg24a_hp20_40m.repl",
+        "sha256": "e2dd37c54081412b9ee156daa7bd5436bd26fb83b64f4599c02d071095cf40d1",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd2601b_mg24a_i2cxg2.repl",
+        "sha256": "73c10beb3aef9084ae61d9eea01a407f6bb6385c41dde5645cb527736fb124ae",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd4116a_38m4.repl",
+        "sha256": "ee9327db3ee3e930bf3d73c37116e6f7040ac2d0202d5cb0fead7317e9ad4e8d",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd4116a_dev10.repl",
+        "sha256": "4cb7d8575092128fb79fa049b2edd38c5ddf515a561c8eb82da5cb8e85e1b54f",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd4117a_aqara.repl",
+        "sha256": "747eac4e9a9a1df9459b258e884148fb37ef1d1b5e42d7d2f7553e3837eda62b",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd4117a_burtc_i2cxg2.repl",
+        "sha256": "0d14dc2d78d33165f9314ffdc20b8bc3246e0ad3f34087cf35bf10d052d1e1c6",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd4117a_burtc_i2cxg2_38m4.repl",
+        "sha256": "1009e6f76cdf547fb97362b4a44eab4b0e4148ddd67cde100bac65ebc72f9857",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd4117a_burtc_i2cxg2_extflash.repl",
+        "sha256": "2751bee31f56e64adbe7d65f83ed3e2ab020acc7caf1dc5f4c4eeb90a8a29b7a",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd4117a_i2cxg2.repl",
+        "sha256": "e0a7b79035f2c930fcc9ec1cef92a0335530f96657aec5d582fbd3965328bfc4",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/brd4117a_pa10.repl",
+        "sha256": "5a299d488afa895678131b3a7572abea3ccd4195ba4ab9c6637d1f9bd68c495e",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/dcdc_xg24.repl",
+        "sha256": "08291692a1e3bf9b6b1286a44b26b513f04bf459737b1cf147f06c6f2f7f3ec3",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/dcdc_xg24_unreg.repl",
+        "sha256": "f1ffddc8f7ae3d6262b756ff39ce331d07d7809d81907864e72fe9fc06ecda05",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/efr32xG24_i2cxg2.repl",
+        "sha256": "ed31e4d3a97d7dc51d7f08a60d751d3f7002c3b4e6a17295a4b8e158ec87ead9",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/efr32xG26_i2cxg2.repl",
+        "sha256": "4a2826e625b434845df50b1ca6010fec99e455acc3de7f74d25c3dbdd6f69ea0",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/heiman4104_mg24a_38m4_iadc_lfcal.repl",
+        "sha256": "05dc3c8fe0bcc19d42d7f8bff159280121a8103d8d6b74c5052267044ff24e19",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/heiman4104_mg24a_39m_iadc.repl",
+        "sha256": "a277ff1f340a0fda82733ff7617ff39a83d509a2edb597a1f66a5541a3d988e0",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/heiman4104_sysrtc_null_diag.repl",
+        "sha256": "5f578932be96b6ddc72b9ad3793c3acb8abf2291dea66ed81d8765b4b9ac39dc",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/heiman4104_timer0_wide.repl",
+        "sha256": "3624e646056a857ace606f7c14aadfaabc33854e40ca52be1a779e0d45c33610",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/i2c0_fake.py",
+        "sha256": "60c1beb39d1d8b9d00f2252e160b0be7f99980b47dc5a7f47c35e7d1dfc7e82e",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/ikea12289_timer0_wide.repl",
+        "sha256": "1290a76c3da53d2b0616e4b5275586acd48efa64f8a58d725a4de3483411522b",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/lg4142_brd4116a_dev10_i2c0s2.repl",
+        "sha256": "fa23b51522e9e0658a7d2007f09ab9c42705214f06106fc928aa1f1df786ef2c",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/lg4142_xg26_cpu_i2c0s2.repl",
+        "sha256": "caf85ccee6d23ab3398ddd9922061a80d26a3a075b300cb609fbbd7b59459707",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/lg4142_xg26_eusart23_i2c123.repl",
+        "sha256": "ac26ceb0bf91adb3435f42ba089185f39e352815122c72f300f9605fab1182bb",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/lg4142_xg26_iadc0.repl",
+        "sha256": "1eafdef1e7f2d4031636879eee265249bb03c33fdf45d51fbe46bd70f1da5ead",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/provision_pages/README.md",
+        "sha256": "daef16d18d0eabddf9781169b84b5933da5cd67622295d8b46046604a42b3aa4",
+        "status": "PROVENANCE_DOCUMENT",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/provision_pages/heiman_4619_4102_provision_0x0817E000_nodackey.bin",
+        "sha256": "8bae8a2449e4210601e52e8f1d443a11f509df638e02d9e12bef567715b21a79",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/provision_pages/heiman_4619_4102_provision_0x0817E000_nodackey_csatestcreds.bin",
+        "sha256": "494a77dfdca41eaf00d881cf2921d51997a843820ecde2d29570d424b67329d9",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/provision_pages/heiman_provision_page.py",
+        "sha256": "2532492d3e2a5f947d592ec2af24be6242a7694dfda315a75aff3f2da4b40709",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/rtt_console.py",
+        "sha256": "c882d55cdbd209ffe58869002d79484b9513d081fbeac33f4246d52da450a9d7",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      },
+      {
+        "path": "scripts/renode_overlays/tuya4701_userdata_page.repl",
+        "sha256": "fe8feca610a255363717d53816e74af0fe29819c08c1ae2d17db6ccf0f675eb8",
+        "status": "NOT_MIGRATED_NOT_VALIDATED",
+        "review_depth": "Inventory and prior AUDIT.md only; no per-file 26q3 semantic equivalence or device regression"
+      }
+    ],
+    "policy": "Prior A/B/C labels are inherited notes, not newly validated classifications. No overlay or provisioning bytes are automatically installed."
+  },
+  "local_CSharp_workspace_variants": {
+    "unique_name_hash_pairs": 17,
+    "entries": [
+      {
+        "filename": "SiLabsEusart2RxFix.cs",
+        "sha256": "237a8a426d7e8a41e2d25b64408878638466582311d1636dc5451f2d1d6505d5",
+        "copies": 1,
+        "example_paths": [
+          "workspaces/Aqara/4447_10244_0e74c9a12516_a7d4/SiLabsEusart2RxFix.cs"
+        ],
+        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+      },
+      {
+        "filename": "SiLabsEusart2RxFix.cs",
+        "sha256": "2c2c60278d022296fecbe56c3f5b6271ed42820f0e43dac94d299a9ebb2bccad",
+        "copies": 1,
+        "example_paths": [
+          "workspaces/Aqara/4447_10244_0e74c9a12516_a4d2/SiLabsEusart2RxFix.cs"
+        ],
+        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+      },
+      {
+        "filename": "SiLabsEusart2RxFix.cs",
+        "sha256": "4c66a74854142cf428e9f47cc4a8c24e26b955912391801ab4d2a89bd2332156",
+        "copies": 1,
+        "example_paths": [
+          "workspaces/Aqara/4447_10244_0e74c9a12516_a6d8/SiLabsEusart2RxFix.cs"
+        ],
+        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+      },
+      {
+        "filename": "SiLabsEusart2RxFix.cs",
+        "sha256": "5287ea4e7844bc87009ee0f214c986748325d1881836d5d06260cc710a8a8c74",
+        "copies": 2,
+        "example_paths": [
+          "workspaces/LG_Electronics/4142_8704_01f75e20b25b_pc1/SiLabsEusart2RxFix.cs",
+          "workspaces/Ltech/5535_45058_32d68b99c7cd_pc1/SiLabsEusart2RxFix.cs"
+        ],
+        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+      },
+      {
+        "filename": "SiLabsEusart2RxFix.cs",
+        "sha256": "6e93f336331d6bb1cae455ce29bb6fce15bdb1bb655f935e74f52b97272eece4",
+        "copies": 1,
+        "example_paths": [
+          "workspaces/Aqara/4447_10244_0e74c9a12516_a3rxf/SiLabsEusart2RxFix.cs"
+        ],
+        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+      },
+      {
+        "filename": "SiLabsEusart2RxFix.cs",
+        "sha256": "9734cc57d52f3e225c8d3015c0b663df7905d00300a44c7ed31205cad838698b",
+        "copies": 1,
+        "example_paths": [
+          "workspaces/Aqara/4447_10244_0e74c9a12516_a2pc/SiLabsEusart2RxFix.cs"
+        ],
+        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+      },
+      {
+        "filename": "SiLabsEusart2RxFix.cs",
+        "sha256": "c1cf54d22170691ad934ed5adf371d7d558b8dc37e6a514e43ec2673adcfaa5b",
+        "copies": 1,
+        "example_paths": [
+          "workspaces/Aqara/4447_10244_0e74c9a12516_a5nf/SiLabsEusart2RxFix.cs"
+        ],
+        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+      },
+      {
+        "filename": "SiLabsEusart2RxFix.cs",
+        "sha256": "e53bb9ead6eabbc74f512569998aefedc32cbc31e5219b4efa51ed64bdd333db",
+        "copies": 5,
+        "example_paths": [
+          "workspaces/Aqara/4447_10244_0e74c9a12516_a0/SiLabsEusart2RxFix.cs",
+          "workspaces/Aqara/4447_10244_0e74c9a12516_a1/SiLabsEusart2RxFix.cs",
+          "workspaces/Aqara/4447_10244_0e74c9a12516_r1sto/SiLabsEusart2RxFix.cs"
+        ],
+        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+      },
+      {
+        "filename": "SiLabsEusart2RxGate.cs",
+        "sha256": "8e83958f63bed22143c9c8039bb2ccd24bf7a4d7828131f30cb2724b3af5112e",
+        "copies": 5,
+        "example_paths": [
+          "workspaces/R1BWS/C0/SiLabsEusart2RxGate.cs",
+          "workspaces/R1BWS/C1/SiLabsEusart2RxGate.cs",
+          "workspaces/R1BWS/C2/SiLabsEusart2RxGate.cs"
+        ],
+        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+      },
+      {
+        "filename": "SiLabsGpio3ExtiFix.cs",
+        "sha256": "02bab1ce947f1d786bdf4a3945c225bfa37ba37deca8f18f9012f0d5507a5389",
+        "copies": 4,
+        "example_paths": [
+          "workspaces/Aqara/4447_10244_57ebc801b4a1_bfix/SiLabsGpio3ExtiFix.cs",
+          "workspaces/Aqara/4447_10247_9904a937e43f_bfix/SiLabsGpio3ExtiFix.cs",
+          "workspaces/Ltech/5535_45058_32d68b99c7cd_bfix/SiLabsGpio3ExtiFix.cs"
+        ],
+        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+      },
+      {
+        "filename": "SiLabsGpio3ExtiFix.cs",
+        "sha256": "2dfd9a5ed4acc2f6be27ebdd637d2a91855bd454da69f0ecb6ea403e47fb4ef2",
+        "copies": 22,
+        "example_paths": [
+          "workspaces/Aqara/4447_10244_0e74c9a12516_r1sto/SiLabsGpio3ExtiFix.cs",
+          "workspaces/Aqara/4447_10244_57ebc801b4a1_r2fix/SiLabsGpio3ExtiFix.cs",
+          "workspaces/Aqara/4447_10244_57ebc801b4a1_r2stock/SiLabsGpio3ExtiFix.cs"
+        ],
+        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+      },
+      {
+        "filename": "SiLabsGpio3Sham.cs",
+        "sha256": "faf622d1dfd1386254add6ec69fb30cd684cfb7c51f3a63476787bf989f14194",
+        "copies": 11,
+        "example_paths": [
+          "workspaces/Aqara/4447_10244_57ebc801b4a1_vfix/SiLabsGpio3Sham.cs",
+          "workspaces/Aqara/4447_10244_57ebc801b4a1_vsham/SiLabsGpio3Sham.cs",
+          "workspaces/Aqara/4447_10244_57ebc801b4a1_vstock/SiLabsGpio3Sham.cs"
+        ],
+        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+      },
+      {
+        "filename": "SiLabsGpio3ShamB.cs",
+        "sha256": "b0990f39cba11b939f7f01636a7c71b92ff01bc1f44ccb5cccbe0c7b7e7e161a",
+        "copies": 4,
+        "example_paths": [
+          "workspaces/Aqara/4447_10244_57ebc801b4a1_bsham/SiLabsGpio3ShamB.cs",
+          "workspaces/Aqara/4447_10244_57ebc801b4a1_bstock/SiLabsGpio3ShamB.cs",
+          "workspaces/Aqara/4447_10247_9904a937e43f_bstock/SiLabsGpio3ShamB.cs"
+        ],
+        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+      },
+      {
+        "filename": "aqara_spi_flash_r4.cs",
+        "sha256": "6a69f4eeac08423a45bb7dd91593040d20d3442f71e21a447d3eed52ea744074",
+        "copies": 1,
+        "example_paths": [
+          "workspaces/fix-R4-nor-write-semantics/ws_r4/aqara_spi_flash_r4.cs"
+        ],
+        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+      },
+      {
+        "filename": "variant.cs",
+        "sha256": "14b3ba9d6767e71084f410f40c3d0e3abd0bdb08e6960f288d2d9621994c54fc",
+        "copies": 1,
+        "example_paths": [
+          "workspaces/Aqara/4447_10244_57ebc801b4a1_clone/variant.cs"
+        ],
+        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+      },
+      {
+        "filename": "variant.cs",
+        "sha256": "254598deb21f9cfbfb1d79b300d16f2c82c6b11c9f03022b359c4c25848d0647",
+        "copies": 1,
+        "example_paths": [
+          "workspaces/Aqara/4447_10244_57ebc801b4a1_prevonly/variant.cs"
+        ],
+        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+      },
+      {
+        "filename": "variant.cs",
+        "sha256": "3c0a68fb724fc3b0f112e6ef9449f5370f02e5b070bca35c586b623d069b9140",
+        "copies": 1,
+        "example_paths": [
+          "workspaces/Aqara/4447_10244_57ebc801b4a1_sentonly/variant.cs"
+        ],
+        "status": "NOT_MIGRATED_NEEDS_SOURCE_AND_DEVICE_REVIEW"
+      }
+    ],
+    "limit": "Runtime-loaded copies and sham/diagnostic variants may coexist. These are not all production patches."
+  },
+  "remaining_reviews": [
+    {
+      "item": "BLE supervision/rescan and interval search",
+      "source": "mw-emu/scripts/ble_bridge_interval_search.patch and ble_bridge_gate_test/",
+      "status": "NOT_MIGRATED",
+      "reason": "Patch requires an earlier supervision patch; current candidate ConnectionEvent signature differs. Requires original control tests and HEIMAN/IKEA/Tuya clock-variant regression."
+    },
+    {
+      "item": "GPIO3 EXTI alias correction",
+      "source": "mw-emu/workspaces/_diagB/57eb_bdiagfix/SiLabsGpio3ExtiFix.cs",
+      "status": "SOURCE_COMPARED_NOT_MIGRATED",
+      "finding": "Current upstream SiLabs_GPIO_3 still initializes targetExternalPins to 0 and indexes previousState by external interrupt channel; local fix uses an unmapped sentinel and per-pin edge state. Device A/B not rerun."
+    },
+    {
+      "item": "Board/peripheral overlays",
+      "status": "INVENTORIED_NOT_MIGRATED",
+      "examples": [
+        "deviceNumber/flash-size selection",
+        "38.4/40 MHz and PA variants",
+        "SMU/DCDC/BURTC/IADC",
+        "xG26 EUSART/I2C/SPI-NOR mappings"
+      ],
+      "reason": "Need per-board comparison against 26q3 constructor/clock APIs and real part identity; older labels do not establish hardware fidelity."
+    },
+    {
+      "item": "CMU 38.4 MHz calibration compensation",
+      "status": "NOT_MIGRATED",
+      "finding": "Current CMU_3 calibration still contains hardcoded 39MHz references. Do not assume old SYSRTC 33280Hz compensation can be deleted or enabled generally."
+    },
+    {
+      "item": "Local staged-CCM work",
+      "status": "UPSTREAM_VECTOR_REPLACEMENT_ONLY",
+      "finding": "Upstream staged CCM vectors pass; original local diagnostic source was not found in this inventory. Original vendor-firmware scenario was not replayed."
+    },
+    {
+      "item": "Full runtime image differences",
+      "status": "NOT_EXHAUSTIVELY_RECOVERED",
+      "finding": "mw-emu/renode is a runtime tree without Git history or complete model sources. Artifact inventory cannot prove every compiled local modification is represented."
+    },
+    {
+      "item": "Commissioning host/container tooling",
+      "status": "HISTORICAL_RECIPE_RETAINED_NOT_FULLY_PORTABLE",
+      "finding": "Build image works. Runtime recipe still has hardcoded /home/chen paths and external chip-tool/OTBR dependencies; full rootless commissioning/Thread/Invoke/Read regression pending."
+    }
+  ],
+  "excluded_branches": [
+    {
+      "item": "MG21 platform/infrastructure/tlib feature branches",
+      "status": "OUTSIDE_CURRENT_STOCK_MATTER_MIGRATION",
+      "reason": "Not in selected gitlink pair; keep upstream-matched tlib. Needs a separate platform-specific migration."
+    },
+    {
+      "item": "bugfix/pseudo_rng",
+      "status": "NOT_INTEGRATED_NOT_ASSESSED_FOR_EQUIVALENCE"
+    },
+    {
+      "item": "Aliro/U400 experimental branches",
+      "status": "OUTSIDE_CURRENT_SCOPE",
+      "reason": "Not part of the stock-Matter baseline; do not import retired experiments by default."
+    }
+  ],
+  "validation_limits": [
+    "79 component checks plus separate 6 SHA256 descriptor cases; board load and two GATT controls pass.",
+    "Full commissioning/Thread/CASE/Invoke/Read not validated.",
+    "Performance comparison covers one firmware and BLE polling, with noisy shared-host measurements.",
+    "Production runtime remains unchanged."
+  ],
+  "references": [
+    "SILABS_COMMIT_MAP.json",
+    "SILABS_REBASE_REVIEW.json",
+    "src/Infrastructure/SILABS_REBASE_REVIEW.json",
+    "tests/peripherals/SiLabs/mailbox_fix_validation_20261102.json"
+  ]
+}
