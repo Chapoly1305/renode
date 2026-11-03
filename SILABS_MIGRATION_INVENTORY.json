@@ -1,7 +1,7 @@
 {
   "date": "2026-11-02",
   "all_previous_changes_migrated": false,
-  "scope_statement": "Selected GitHub fork delta is accounted for; inventory of local artifacts is not a completed semantic review or migration of the local runtime.",
+  "scope_statement": "Selected GitHub fork delta is accounted for; all 17 inventoried C# workspace variants reviewed and physical deltas ported or diagnostic controls explicitly excluded. Board overlays and full runtime/host migration remain incomplete.",
   "completed": [
     {
       "scope": "Renode matter-emulated-commissioning",
@@ -27,6 +27,16 @@
     {
       "scope": "26q3 medium routing API",
       "disposition": "Both bridges use RF/10kHz keys; Thread UDP still uses channel 11..26; actual-radio SYNTH key tests pass"
+    },
+    {
+      "scope": "Local EUSART2 RXBLOCK gate",
+      "disposition": "RXEN already upstream; RXBLOCK ported; six regressions and ten upstream tests pass",
+      "commit": "8fb6625b"
+    },
+    {
+      "scope": "Local R4 SPI NOR programming and addressing",
+      "disposition": "Ported physical semantics to GenericSpiFlash; six regressions pass; original Aqara device scenario still pending",
+      "commit": "8fb6625b"
     }
   ],
   "local_overlays": {
@@ -437,8 +447,8 @@
           "workspaces/R1BWS/C1/SiLabsEusart2RxGate.cs",
           "workspaces/R1BWS/C2/SiLabsEusart2RxGate.cs"
         ],
-        "status": "REVIEWED_PARTLY_UPSTREAM_PENDING_RXBLOCK",
-        "decision": "Current UARTBase.WriteChar and EUSART2 IsReceiveEnabled already gate disabled RX. CMD RXBLOCKEN/DIS and STATUS RXBLOCK are still unmodelled and need a separate port/test; diagnostic census logging excluded."
+        "status": "MIGRATED_INTO_EUSART2",
+        "decision": "Existing UARTBase RXEN gate retained; CMD RXBLOCKEN/DIS and STATUS RXBLOCK ported without diagnostic census logging or FIFO expansion. Six new and ten upstream EUSART2 tests pass."
       },
       {
         "filename": "SiLabsGpio3ExtiFix.cs",
@@ -495,8 +505,8 @@
         "example_paths": [
           "workspaces/fix-R4-nor-write-semantics/ws_r4/aqara_spi_flash_r4.cs"
         ],
-        "status": "REVIEWED_PENDING_NOR_MODEL_PORT",
-        "decision": "Current GenericSpiFlash still writes bytes verbatim, omits EAR on write and uses > rather than >= bounds. Port physical semantics with tests; exclude diagnostic counters/logging."
+        "status": "MIGRATED_INTO_GENERIC_SPI_FLASH",
+        "decision": "Physical NOR old & new programming, EAR bank addressing and exact-end bounds ported. Six component cases pass, including subclass verifier contract. Diagnostic counters excluded; no claim Aqara firmware is fixed."
       },
       {
         "filename": "variant.cs",
@@ -529,7 +539,9 @@
         "decision": "GPIO sham or partial-fix arm from A/B experiments; consolidate the real fix into SiLabs_GPIO_3 rather than shipping controls as production models."
       }
     ],
-    "limit": "Runtime-loaded copies and sham/diagnostic variants may coexist. These are not all production patches."
+    "limit": "Runtime-loaded copies and sham/diagnostic variants may coexist. These are not all production patches.",
+    "review_complete": true,
+    "physical_deltas_ported": true
   },
   "remaining_reviews": [
     {
@@ -587,7 +599,8 @@
     {
       "item": "Commissioning host/container tooling",
       "status": "HISTORICAL_RECIPE_RETAINED_NOT_FULLY_PORTABLE",
-      "finding": "Pinned connectedhomeip submodule 8bb8a4ff is now checked out and contains FakeBleTransport. Host binaries still need building; rootless commissioning/Thread/Invoke checks remain pending."
+      "finding": "Pinned connectedhomeip submodule 8bb8a4ff is now checked out and contains FakeBleTransport. Host binaries still need building; rootless commissioning/Thread/Invoke checks remain pending.",
+      "dependency_blocker": "Pinned connectedhomeip Openthread gitlink 21c9cdd484a531d126758fa02e4343eb587f17fb is unavailable from configured openthread/openthread remote; shallow checkout failed. No dependency pin was silently changed."
     }
   ],
   "excluded_branches": [
@@ -619,7 +632,7 @@
     "tests/peripherals/SiLabs/mailbox_fix_validation_20261102.json"
   ],
   "latest_checkpoint": {
-    "infrastructure": "1d04d7da865f10569477cbab8298cb36919935d3",
+    "infrastructure": "af7991ec92d0a4b712302393b25da3ba9a7ecf39",
     "status": "IN_PROGRESS",
     "all_required_work_complete": false
   }

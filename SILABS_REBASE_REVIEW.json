@@ -6,7 +6,7 @@
   "branch": "integration/stock-ble-on-silabs-26q3",
   "status": "BOOT_TO_GATT_PASS_WITH_EXPLICIT_COMPENSATION_PENDING_COMMISSIONING",
   "method": "Rebase the 21 commits after Silicon Labs 26q1 onto 26q3; resolve every historical Infrastructure bump to the separately ported candidate rather than reinstalling old model commits.",
-  "infrastructure": "1d04d7da865f10569477cbab8298cb36919935d3",
+  "infrastructure": "af7991ec92d0a4b712302393b25da3ba9a7ecf39",
   "tlib": "43a51de2aa1b05fdfd2073681b9b027af555422c",
   "resources_for_validation": "9d7824771f3db67663950cae06f5bb7f89fbf33b",
   "retained": [
@@ -28,9 +28,7 @@
     "dockerfile": "docker/Dockerfile.build",
     "status": "PASSED",
     "errors": 0,
-    "warnings": [
-      "Existing unused connectIndScheduled field in BleCentralBridge"
-    ]
+    "warnings": []
   },
   "validation": {
     "SYMCRYPTO_1.py": {
@@ -115,7 +113,7 @@
       "renode": 21,
       "infrastructure": 6
     },
-    "local_artifacts": "51 overlay-related files and 17 unique C# workspace variants inventoried; per-file semantic migration is incomplete",
+    "local_artifacts": "51 overlay-related files inventoried but not migrated; all 17 unique C# workspace variants reviewed, physical deltas ported and sham/FIFO diagnostic variants excluded",
     "inventory": "SILABS_MIGRATION_INVENTORY.json",
     "validation_incomplete": "Full commissioning/Thread/CASE/Invoke/Read and broad vendor corpus not validated"
   },

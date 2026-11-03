@@ -1,7 +1,7 @@
 {
   "date": "2026-11-02",
   "status": "LOCAL_MIGRATION_IN_PROGRESS",
-  "infrastructure": "1d04d7da865f10569477cbab8298cb36919935d3",
+  "infrastructure": "af7991ec92d0a4b712302393b25da3ba9a7ecf39",
   "deployed_baseline_sha256": "ccf47eea9507babb5cff7e59f68c85b20b0ef88929a3e65681df11e35d19bdfe",
   "GPIO3": {
     "before": "output/local-migration/gpio3-before.log",
@@ -54,11 +54,88 @@
         "docker_exit_after_cleanup": 137,
         "scope": "Boot to GATT; no firmware hooks or commissioning"
       }
+    ],
+    "nor-rxblock-ltech": [
+      {
+        "runtime": "nor-rxblock",
+        "root": "/home/jchen73/renode-integration",
+        "status": "PASS",
+        "elapsed_seconds": 9.07,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/Ltech/5535/5535_45058_257592_32d68b99c7cd.elf",
+        "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+        "board": "brd2601b",
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "hostmailbox_compensation_enabled": true,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning"
+      }
+    ],
+    "nor-rxblock-lg": [
+      {
+        "runtime": "nor-rxblock",
+        "root": "/home/jchen73/renode-integration",
+        "status": "TIMEOUT",
+        "elapsed_seconds": 70.24,
+        "elf": "/home/jchen73/mw-emu/corpus/home/chen/MatterOverwatch/compass_evaluation/corpora/silabs_exact_101/LG_Electronics/4142/4142_8704_1507958_01f75e20b25b.elf",
+        "elf_sha256": "9736771a0e3a15fb01804d6435854379374c704a67ceb9e1e518b045c725e24f",
+        "board": "brd2601b",
+        "board_identity_confirmed": false,
+        "load_base": "0x8006000",
+        "timeout_seconds": 70,
+        "terminated_by_harness": true,
+        "hostmailbox_compensation_enabled": true,
+        "docker_exit_after_cleanup": 137,
+        "scope": "Boot to GATT; no firmware hooks or commissioning"
+      }
     ]
   },
   "limits": [
     "Full commissioning and vendor clock-skew firmware scenarios pending",
     "Board/peripheral overlays and remaining physical model deltas still being migrated",
-    "Old production runtime unchanged"
-  ]
+    "Old production runtime unchanged",
+    "LG 4142/8704 default-board control still times out at 70s, as in the earlier old-runtime control; no claim of successful LG regression or confirmed board identity."
+  ],
+  "build": {
+    "command": "./build.sh --skip-fetch",
+    "image": "local/renode-build:silabs-26q3",
+    "status": "PASS",
+    "errors": 0,
+    "warnings": 0,
+    "elapsed_seconds": 36.6
+  },
+  "SPI_NOR": {
+    "cases": 6,
+    "before_cases": 5,
+    "before_failures": 2,
+    "after_failures": 0,
+    "after": "output/local-migration/SPI_NOR_rebase-after.log",
+    "before": "output/local-migration/SPI_NOR_rebase-before.log",
+    "coverage": [
+      "programming clears bits only",
+      "EAR write/read bank consistency",
+      "read/write end bounds",
+      "subclass protected verifier rejects exact end",
+      "WEL gate"
+    ],
+    "scope": "Compiled GenericSpiFlash; actual public SPI transactions, plus protected subclass verifier contract"
+  },
+  "EUSART2_RXBLOCK": {
+    "cases": 6,
+    "before_failures": 2,
+    "after_failures": 0,
+    "before": "output/local-migration/EUSART_2_RXBLOCK_rebase-before.log",
+    "after": "output/local-migration/EUSART_2_RXBLOCK_rebase-after.log",
+    "upstream_suite": {
+      "path": "tests/peripherals/SiLabs/EUSART.robot",
+      "IP_VERSION": 2,
+      "passed": 10,
+      "failed": 0,
+      "results": "output/local-migration/eusart-upstream/robot_output.xml"
+    },
+    "scope": "Compiled EUSART2 RX enable/block/status/reset and queued data preservation; physical FIFO size retained"
+  },
+  "model_code_commit": "8fb6625b79e6ffbff1a7675d40a50b9158f61e34"
 }
