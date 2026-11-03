@@ -4,9 +4,9 @@
   "old_branch": "matter-emulated-commissioning",
   "old_tip": "9d2707317030cd739f467f472bfe805a391265db",
   "branch": "integration/stock-ble-on-silabs-26q3",
-  "status": "PASE_PASS_WITH_EXPLICIT_COMPENSATION_PENDING_THREAD_COMMISSIONING",
+  "status": "FULL_STOCK_E2E_PASS_CLEAN_REBUILD_PENDING",
   "method": "Rebase the 21 commits after Silicon Labs 26q1 onto 26q3; resolve every historical Infrastructure bump to the separately ported candidate rather than reinstalling old model commits.",
-  "infrastructure": "67f781b25566deb2eaffc2361ba827b3ec9a9ae2",
+  "infrastructure": "03fbfb64f5195bd960c92ab79687baf672d5f2f3",
   "tlib": "c04d273709cfe8e604233199dc54f638210c9eb5",
   "resources_for_validation": "9d7824771f3db67663950cae06f5bb7f89fbf33b",
   "retained": [
@@ -83,11 +83,13 @@
     "uninstrumented firmware commissioning and Invoke/Read controls"
   ],
   "limits": [
-    "Old Docker runtime-only script still depends on hardcoded /home/chen paths and separately built chip-tool/otbr",
-    "Migrated optional board profiles are explicit; compatibility shims and diagnostics are not automatically enabled",
-    "Recovered original MG21 HS1SA ELF and lab fake-BLE chip-tool/OT CLI; OTBR source recovered but binary not yet built. Original artifacts are in a private evidence archive.",
-    "Do not replace the existing runtime until stock firmware controls pass",
-    "Boot-to-GATT and real Ltech PASE pass; full commissioning/Thread/CASE/Invoke/Read remain pending. Production runtime was not replaced."
+    "Stock Ltech and selected LG profile pass complete source-built commissioning, UDP CASE and operational Read/Toggle/Read; this is not physical timing fidelity.",
+    "Hostmailbox acknowledgement and host MLE/RA timing compensation are explicit, retained simulation settings.",
+    "The MG24A LG profile is selected explicitly; physical device identity is not proved.",
+    "Quectel times out at ThreadNetworkEnable on both tested old and candidate runtimes. It is not a full commissioning pass.",
+    "Exact old DLL build provenance and original runtime-loaded LG subclass source remain unavailable. Public source snapshots and compatibility contracts are preserved.",
+    "MG21 is an experimental legacy profile; stable real-vendor boot and physical clock/power fidelity are not qualified.",
+    "Existing production runtime has not been replaced."
   ],
   "prior_regression_report": "tests/peripherals/SiLabs/rebase_validation_20261102.json",
   "prior_firmware_gate": {
@@ -121,7 +123,7 @@
     },
     "local_artifacts": "All 51 overlay-related files and 17 unique local C# variants have explicit migration or exclusion decisions. 47 profiles load with 26q3. Vendor/runtime equivalence remains incomplete.",
     "inventory": "SILABS_MIGRATION_INVENTORY.json",
-    "validation_incomplete": "Full commissioning/Thread/CASE/Invoke/Read and broad vendor corpus not validated",
+    "validation_incomplete": "Clean checkout build reproduction and final inventory audit; broad vendor corpus and stable MG21 boot are not qualified.",
     "remaining_platform_work": "MG21 contracts are migrated and component-tested; real MG21 boot and legacy IP approximations need validation."
   },
   "hash_regression_report": "tests/peripherals/SiLabs/symcrypto_hash_validation_20261102.json",
@@ -130,5 +132,7 @@
   "local_migration_checkpoint": "tests/peripherals/SiLabs/local_migration_validation_20261102.json",
   "overlay_migration_checkpoint": "tests/peripherals/SiLabs/overlay_migration_validation_20261102.json",
   "prior_component_checks_passed": 79,
-  "lab_recovery_checkpoint": "tests/peripherals/SiLabs/lab_recovery_validation_20261103.json"
+  "lab_recovery_checkpoint": "tests/peripherals/SiLabs/lab_recovery_validation_20261103.json",
+  "sdk": "4b82451ee229cd66e54cce8b2681bad4045b8a0f",
+  "stock_e2e_checkpoint": "tests/peripherals/SiLabs/stock_e2e_validation_20261103.json"
 }

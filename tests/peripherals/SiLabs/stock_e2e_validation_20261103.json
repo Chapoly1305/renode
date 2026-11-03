@@ -1,0 +1,305 @@
+{
+  "date_utc": "2026-11-03",
+  "status": "FULL_STOCK_E2E_PASS_CLEAN_REBUILD_PENDING",
+  "all_required_work_complete": false,
+  "infrastructure": "03fbfb64f5195bd960c92ab79687baf672d5f2f3",
+  "infrastructure_model_code": "32dd8806a8b5186d33175fa0789689b297e9c623",
+  "tlib": "c04d273709cfe8e604233199dc54f638210c9eb5",
+  "sdk": "4b82451ee229cd66e54cce8b2681bad4045b8a0f",
+  "host_sources": {
+    "OpenThread_CLI": "21c9cdd484a531d126758fa02e4343eb587f17fb",
+    "OTBR": "76e9c38a4e5faae911c6beb76374a0cee83c77de",
+    "OTBR_nested_OpenThread_and_RCP": "c6ec3c797ec2cb9d273a7a9d5abcb65c2e6b9096"
+  },
+  "host_build": {
+    "container": "docker/Dockerfile.host-tools",
+    "entry_point": "docker/build-host-tools.sh",
+    "compiler": "Ubuntu 24.04 system GCC; no CIPD compiler overrides",
+    "ZAP": "v2026.05.12-nightly with pinned release-asset SHA256",
+    "status": "PASS",
+    "BLE_timeout_unit_tests_passed": 2,
+    "timeout_checks": "Positive decimal values, uint32 boundary; sixteen malformed/negative/zero/overflow inputs retain caller defaults."
+  },
+  "firmware_controls": {
+    "otbr-ltech-all-source": {
+      "status": "COMMISSIONING_PASS",
+      "elapsed_seconds": 39.36,
+      "pairing_returncode": 0,
+      "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+      "chip_tool_sha256": "a8ed7c5abca84d18f5167076f3d392e2b4ede147f2b331bd50289494df6e3533",
+      "platform": "platforms/boards/silabs/brd2601b.repl",
+      "PASE_established": true,
+      "network_enable_observed": true,
+      "hostmailbox_compensation": true,
+      "BTP_timeout_overrides_ms": 90000,
+      "pase_only": false,
+      "thread_host": "OTBR",
+      "operational": {
+        "read_before": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "read",
+            "on-off",
+            "1",
+            "1"
+          ]
+        },
+        "invoke_toggle": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "toggle",
+            "1",
+            "1"
+          ]
+        },
+        "read_after": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "read",
+            "on-off",
+            "1",
+            "1"
+          ]
+        }
+      },
+      "scope": "Real unmodified firmware and native chip-tool; no firmware hooks; full commissioning excludes Invoke/Read unless separately tested",
+      "network_enable_completed": true,
+      "UDP_CASE_Sigma2_received": true,
+      "observed_OnOff": {
+        "read_before": [
+          "TRUE"
+        ],
+        "read_after": [
+          "FALSE"
+        ]
+      },
+      "read_toggle_read_verified": true,
+      "evidence_directory": "output/commissioning/otbr-ltech-all-source",
+      "interpretation": "Derived from the original result and raw protocol/attribute logs; original result file retained unchanged."
+    },
+    "otbr-lg-all-source": {
+      "status": "COMMISSIONING_PASS",
+      "elapsed_seconds": 41.44,
+      "pairing_returncode": 0,
+      "elf_sha256": "9736771a0e3a15fb01804d6435854379374c704a67ceb9e1e518b045c725e24f",
+      "chip_tool_sha256": "a8ed7c5abca84d18f5167076f3d392e2b4ede147f2b331bd50289494df6e3533",
+      "platform": "matter/renode-thread/overlays/brd2601b_mg24a.repl",
+      "PASE_established": true,
+      "network_enable_observed": true,
+      "hostmailbox_compensation": true,
+      "BTP_timeout_overrides_ms": 90000,
+      "pase_only": false,
+      "thread_host": "OTBR",
+      "operational": {
+        "read_before": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "read",
+            "on-off",
+            "1",
+            "1"
+          ]
+        },
+        "invoke_toggle": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "toggle",
+            "1",
+            "1"
+          ]
+        },
+        "read_after": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "read",
+            "on-off",
+            "1",
+            "1"
+          ]
+        }
+      },
+      "scope": "Real unmodified firmware and native chip-tool; no firmware hooks; full commissioning excludes Invoke/Read unless separately tested",
+      "network_enable_completed": true,
+      "UDP_CASE_Sigma2_received": true,
+      "observed_OnOff": {
+        "read_before": [
+          "FALSE"
+        ],
+        "read_after": [
+          "TRUE"
+        ]
+      },
+      "read_toggle_read_verified": true,
+      "evidence_directory": "output/commissioning/otbr-lg-all-source",
+      "interpretation": "Derived from the original result and raw protocol/attribute logs; original result file retained unchanged."
+    },
+    "otbr-quectel-all-source": {
+      "status": "PAIRING_FAILED",
+      "elapsed_seconds": 114.86,
+      "pairing_returncode": 1,
+      "elf_sha256": "cec91b36cc652f684b1445a2ba54f8fdfcc5e6f6047d3dc2b613d57d8a85b73e",
+      "chip_tool_sha256": "a8ed7c5abca84d18f5167076f3d392e2b4ede147f2b331bd50289494df6e3533",
+      "platform": "platforms/boards/silabs/brd2601b.repl",
+      "PASE_established": true,
+      "network_enable_observed": true,
+      "hostmailbox_compensation": true,
+      "BTP_timeout_overrides_ms": 90000,
+      "pase_only": false,
+      "thread_host": "OTBR",
+      "operational": {},
+      "scope": "Real unmodified firmware and native chip-tool; no firmware hooks; full commissioning excludes Invoke/Read unless separately tested",
+      "network_enable_completed": false,
+      "UDP_CASE_Sigma2_received": false,
+      "observed_OnOff": {
+        "read_before": [],
+        "read_after": []
+      },
+      "read_toggle_read_verified": false,
+      "evidence_directory": "output/commissioning/otbr-quectel-all-source",
+      "interpretation": "Derived from the original result and raw protocol/attribute logs; original result file retained unchanged."
+    },
+    "otbr-quectel-old-runtime": {
+      "status": "PAIRING_FAILED",
+      "elapsed_seconds": 152.17,
+      "pairing_returncode": 1,
+      "elf_sha256": "cec91b36cc652f684b1445a2ba54f8fdfcc5e6f6047d3dc2b613d57d8a85b73e",
+      "chip_tool_sha256": "a8ed7c5abca84d18f5167076f3d392e2b4ede147f2b331bd50289494df6e3533",
+      "platform": "platforms/boards/silabs/brd2601b.repl",
+      "PASE_established": true,
+      "network_enable_started": true,
+      "network_enable_completed": false,
+      "UDP_CASE_Sigma2_received": false,
+      "hostmailbox_compensation": "default",
+      "BTP_timeout_overrides_ms": 90000,
+      "pase_only": false,
+      "thread_host": "OTBR",
+      "operational": {},
+      "image": "renode-matter-groundtruth:latest",
+      "commissioning_verified": false,
+      "onoff_before": [],
+      "onoff_after": [],
+      "operational_verified": false,
+      "scope": "Unmodified firmware, native chip-tool, real OTBR/TUN and UDP CASE. FULL_PASS requires successful commissioning plus Read/Toggle/Read with an observed state change. Hostmailbox and timeout compensation remain explicit.",
+      "observed_OnOff": {
+        "read_before": [],
+        "read_after": []
+      },
+      "read_toggle_read_verified": false,
+      "evidence_directory": "output/commissioning/otbr-quectel-old-runtime",
+      "interpretation": "Derived from the original result and raw protocol/attribute logs; original result file retained unchanged."
+    },
+    "bundled-ltech": {
+      "status": "FULL_PASS",
+      "elapsed_seconds": 38.26,
+      "pairing_returncode": 0,
+      "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+      "chip_tool_sha256": "a8ed7c5abca84d18f5167076f3d392e2b4ede147f2b331bd50289494df6e3533",
+      "platform": "platforms/boards/silabs/brd2601b.repl",
+      "PASE_established": true,
+      "network_enable_started": true,
+      "network_enable_completed": true,
+      "UDP_CASE_Sigma2_received": true,
+      "hostmailbox_compensation": "on",
+      "BTP_timeout_overrides_ms": 90000,
+      "pase_only": false,
+      "thread_host": "OTBR",
+      "operational": {
+        "read_before": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "read",
+            "on-off",
+            "1",
+            "1"
+          ]
+        },
+        "invoke_toggle": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "toggle",
+            "1",
+            "1"
+          ]
+        },
+        "read_after": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "read",
+            "on-off",
+            "1",
+            "1"
+          ]
+        }
+      },
+      "image": "local/renode-stock:26q3",
+      "commissioning_verified": true,
+      "onoff_before": [
+        "TRUE"
+      ],
+      "onoff_after": [
+        "FALSE"
+      ],
+      "operational_verified": true,
+      "scope": "Unmodified firmware, native chip-tool, real OTBR/TUN and UDP CASE. FULL_PASS requires successful commissioning plus Read/Toggle/Read with an observed state change. Hostmailbox and timeout compensation remain explicit.",
+      "observed_OnOff": {
+        "read_before": [
+          "TRUE"
+        ],
+        "read_after": [
+          "FALSE"
+        ]
+      },
+      "read_toggle_read_verified": true,
+      "evidence_directory": "output/commissioning/bundled-ltech",
+      "interpretation": "Derived from the original result and raw protocol/attribute logs; original result file retained unchanged."
+    }
+  },
+  "packaging": {
+    "dockerfile": "docker/Dockerfile.stock",
+    "launcher": "docker/stock.sh",
+    "image": "local/renode-stock:26q3",
+    "image_id": "sha256:9df90d17a63428359c51bde4b81094485fcd9e2acdb675177e5a51b556288b83",
+    "source_binaries_only": true,
+    "runtime_source_mount_required": false,
+    "old_lab_binary_required": false,
+    "firmware_in_image": false,
+    "network": "Private internal Docker network, no host ports",
+    "grants": [
+      "NET_ADMIN in container network namespace",
+      "/dev/net/tun",
+      "net.ipv6.conf.all.forwarding=1 in container network namespace"
+    ],
+    "Ltech_full_pass": true,
+    "clean_checkout_build": "PENDING"
+  },
+  "MG21_vendor_limit": {
+    "firmware_SHA256": "aed8883fddc565ba8211d3a235fbae4172bb3949c54dd183ab8c9a748d510ec8",
+    "uninstrumented_boot_samples": "output/local-migration/mg21-vendor-boot-results.json",
+    "result": "Firmware reaches radio initialization but repeatedly resets. Post-reset fault snapshots alone do not establish stable boot.",
+    "baseline_documentation": "https://github.com/Chapoly1305/renode/blob/33ba842acfdaa726be333bf837178bda07a5b38e/scripts/silabs-vuln/zb06_ota_joined.resc",
+    "baseline_limits": "Historical experiments required unavailable Gecko bootloader/Secure Element support. Diagnostic instruction hooks are not used for stock Matter qualification.",
+    "current_diagnostic": "output/local-migration/mg21-faults.log; precise fault under review"
+  },
+  "limits": [
+    "Hostmailbox acknowledgement and host MLE/RA timing compensation are explicit, retained simulation settings.",
+    "The MG24A LG profile is selected explicitly; physical device identity is not proved.",
+    "Quectel times out at ThreadNetworkEnable on both tested old and candidate runtimes. It is not a full commissioning pass.",
+    "Exact old DLL build provenance and original runtime-loaded LG subclass source remain unavailable. Public source snapshots and compatibility contracts are preserved.",
+    "MG21 is an experimental legacy profile; stable real-vendor boot and physical clock/power fidelity are not qualified.",
+    "Existing production runtime has not been replaced."
+  ],
+  "remaining": [
+    "Clean checkout preparation/build/image reproduction",
+    "Resolve current MG21 UNDEFINSTR diagnostic before attributing its reset loop",
+    "Final source/feature inventory audit, commit and private artifact backup"
+  ]
+}

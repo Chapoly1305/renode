@@ -1,0 +1,21 @@
+FROM ubuntu:24.04@sha256:b59d21599a2b151e23eea5f6602f4af4d7d31c4e236d22bf0b62b86d2e386b8f
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    dotnet-runtime-8.0 libssl3t64 libglib2.0-0t64 libdbus-1-3 \
+    libevent-core-2.1-7t64 libevent-pthreads-2.1-7t64 \
+    iproute2 ipset python3 ca-certificates bash \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt/renode
+COPY renode ./renode
+COPY tools/common.sh ./tools/common.sh
+COPY output/bin/Release/ ./output/bin/Release/
+COPY platforms/ ./platforms/
+COPY scripts/ ./scripts/
+COPY matter/renode-thread/scenarios/ ./matter/renode-thread/scenarios/
+COPY matter/renode-thread/overlays/ ./matter/renode-thread/overlays/
+COPY matter/connectedhomeip/out/renode-host-tools/chip-tool /host-tools/chip-tool
+COPY output/host-build/openthread/examples/apps/cli/ot-cli-ftd /host-tools/ot-cli-ftd
+COPY output/host-build/otbr/src/agent/otbr-agent /host-tools/otbr-agent
+COPY output/host-build/otbr/third_party/openthread/repo/src/posix/ot-ctl /host-tools/ot-ctl
+COPY output/host-build/otbr-rcp/examples/apps/ncp/ot-rcp /host-tools/ot-rcp
+RUN sha256sum /host-tools/* > /host-tools/SHA256SUMS
+CMD ["./renode", "--disable-xwt", "--hide-log"]

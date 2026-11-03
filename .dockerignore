@@ -1,0 +1,14 @@
+.git
+**/.git
+**/.venv
+**/__pycache__
+**/*.elf
+**/*.gbl
+**/*.ota
+output/commissioning
+output/host-tools
+output/local-migration
+output/performance-26q3
+output/migration-tools
+output/*.tar.gz*
+

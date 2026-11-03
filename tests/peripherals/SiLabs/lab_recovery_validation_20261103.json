@@ -34,8 +34,10 @@
       "repository": "Chapoly1305/ot-br-posix",
       "branch": "renode/mle-fast-attach",
       "original_commit": "08d546a593c4e73749806eba4341d5d398d63eab",
-      "integration_commit": "4ded16f1a38c5beb4f72ceb389aa18db710ac000",
-      "change": "Retains the original OpenThread pin; changes nested dependency URL/branch to the recovered fork."
+      "integration_commit": "76e9c38a4e5faae911c6beb76374a0cee83c77de",
+      "change": "Retains the original OpenThread pin; changes nested dependency URL/branch to the recovered fork.",
+      "nested_OpenThread_commit": "c6ec3c797ec2cb9d273a7a9d5abcb65c2e6b9096",
+      "nested_branch": "renode/otbr-fast-attach"
     },
     "native_tools_manifest": "host-tools/MATERIALS_MANIFEST.json in the private evidence archive",
     "source_unrecovered": [
@@ -118,5 +120,6 @@
     "All firmware controls explicitly enable hostmailbox compensation; no physical timing claim.",
     "Production runtime has not been replaced."
   ],
-  "all_required_work_complete": false
+  "all_required_work_complete": false,
+  "superseded_by": "tests/peripherals/SiLabs/stock_e2e_validation_20261103.json"
 }

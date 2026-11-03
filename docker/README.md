@@ -1,4 +1,49 @@
-# Containerized commissioning env (matter-emulated-commissioning)
+# Stock firmware container (26q3 rebase)
+
+The current entry point builds Renode, chip-tool, OpenThread CLI, OTBR and its
+matching simulation RCP from the checked-in source pins. The resulting image
+contains the runtime, platforms and host tools; commissioning mounts only your
+ELF and an output directory. Firmware is not included in the image.
+
+On native Linux with rootless Docker, Bash and Python 3:
+
+```sh
+git clone --branch integration/stock-ble-on-silabs-26q3 https://github.com/Chapoly1305/renode.git
+cd renode
+docker/stock.sh build
+docker/stock.sh commission --elf /absolute/path/device.elf --output ./results/device
+```
+
+The build initializes the required submodules and pinned Renode resources,
+then uses the SDK's system GCC/Python toolchain. ZAP is pinned to
+`v2026.05.12-nightly`; both supported download architectures have SHA-256 checks.
+`BUILD_JOBS=4 docker/stock.sh build` reduces compile parallelism. The default
+image is `local/renode-stock:26q3`; set `STOCK_IMAGE` to choose another name.
+The build uses local image tags and does not publish a container image.
+
+The default device profile is `brd2601b` with its application vector at
+`0x08006000`. Use `--platform matter/renode-thread/overlays/brd2601b_mg24a.repl`
+for the tested LG MG24A sample. Other inputs may require another platform,
+`--load-base`, `--passcode` or `--discriminator`. Selecting a profile does not
+establish the physical device identity.
+
+Each test creates and removes its own container and internal network. Ports
+remain inside that container. OTBR needs `NET_ADMIN` and `/dev/net/tun` in its
+container's network namespace; the runner supplies them without host networking
+or `--privileged`. The host Docker socket is not mounted into the container.
+The runner does not kill other processes or remove controller files on the host.
+
+`results.json` and the logs are written under `--output`. `FULL_PASS` requires
+CommissioningComplete, successful Read/Toggle/Read commands and an observed
+OnOff state change. `--pase-only` tests the initial secure BLE pairing without
+OTBR or its network grants. Hostmailbox compensation and 90-second BTP timeout
+overrides are explicit test-environment settings, not physical timing claims.
+
+## Historical runtime-only environment
+
+The remaining instructions describe the retained July 2026 recipe. It needs
+separate prebuilt trees and the original host paths; use `docker/stock.sh` for
+the current source-based build and isolated test runner.
 
 Runs the Renode + Matter BLE/Thread commissioning proof in a Linux Docker container.
 Motivated by otbr/Docker not working on macOS: otbr needs Linux-native netlink,

@@ -1,0 +1,25 @@
+FROM mcr.microsoft.com/dotnet/sdk:8.0-noble@sha256:42eb9e70b190d0cca893d93724e67fb89e7570e4309c4b1c20b7f6016a90202d
+ARG TARGETARCH
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake ninja-build generate-ninja git pkg-config \
+    python3 python3-venv python3-pip \
+    curl ca-certificates unzip clang-format \
+    libglib2.0-dev libssl-dev libdbus-1-dev libreadline-dev libevent-dev zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+RUN python3 -m venv /opt/matter-build
+ENV PATH="/opt/matter-build/bin:${PATH}"
+COPY matter/connectedhomeip/scripts/setup/requirements.build.txt \
+     matter/connectedhomeip/scripts/setup/constraints.txt /opt/matter-requirements/
+RUN pip install --no-cache-dir -r /opt/matter-requirements/requirements.build.txt \
+    -c /opt/matter-requirements/constraints.txt
+RUN case "$TARGETARCH" in \
+      amd64) zap_arch=x64; zap_sha=b4b4c71eeba57a9a1ff8f54978dc3342bd0005c471f9435240f61bc1644f6818 ;; \
+      arm64) zap_arch=arm64; zap_sha=a6774a14a0fa957d8d830f6517140c3dd949531c1b1696fda0b52688c0566984 ;; \
+      *) exit 1 ;; \
+    esac && \
+    curl -fL --retry 3 "https://github.com/project-chip/zap/releases/download/v2026.05.12-nightly/zap-linux-${zap_arch}.zip" -o /tmp/zap.zip && \
+    echo "${zap_sha}  /tmp/zap.zip" | sha256sum -c - && \
+    unzip -q /tmp/zap.zip -d /opt/zap && rm /tmp/zap.zip && \
+    chmod +x /opt/zap/zap-cli && /opt/zap/zap-cli --version
+ENV PATH="/opt/zap:${PATH}"
+WORKDIR /work
