@@ -4,9 +4,9 @@
   "old_branch": "matter-emulated-commissioning",
   "old_tip": "9d2707317030cd739f467f472bfe805a391265db",
   "branch": "integration/stock-ble-on-silabs-26q3",
-  "status": "RF_RESET_COMPONENT_PASS_FINAL_IMAGE_REPLAY_PENDING",
+  "status": "SOURCE_REBASE_AND_ROOTLESS_PACKAGE_QUALIFIED",
   "method": "Rebase the 21 commits after Silicon Labs 26q1 onto 26q3; resolve every historical Infrastructure bump to the separately ported candidate rather than reinstalling old model commits.",
-  "infrastructure": "e9dcc57bc1b577008dded33c864f20892c0d2430",
+  "infrastructure": "380fd1b485d84fcc943dd3a3bdd60aac20baa2ed",
   "tlib": "c04d273709cfe8e604233199dc54f638210c9eb5",
   "resources_for_validation": "9d7824771f3db67663950cae06f5bb7f89fbf33b",
   "retained": [
@@ -115,7 +115,7 @@
     "Real native chip-tool PASE passes on unmodified Ltech firmware in an isolated rootless container"
   ],
   "migration_coverage": {
-    "all_historical_changes_analyzed_and_migrated": false,
+    "all_historical_changes_analyzed_and_migrated": true,
     "selected_GitHub_delta_accounted_for": true,
     "selected_commits": {
       "renode": 21,
@@ -123,8 +123,9 @@
     },
     "local_artifacts": "All 51 overlay-related files and 17 unique local C# variants have explicit migration or exclusion decisions. 47 profiles load with 26q3. Vendor/runtime equivalence remains incomplete.",
     "inventory": "SILABS_MIGRATION_INVENTORY.json",
-    "validation_incomplete": "Clean checkout build reproduction and final inventory audit; broad vendor corpus and stable MG21 boot are not qualified.",
-    "remaining_platform_work": "MG21 contracts are migrated and component-tested; real MG21 boot and legacy IP approximations need validation."
+    "validation_incomplete": "Broad vendor corpus and physical timing/power fidelity are not qualified; known Quectel/MG21 limits remain documented.",
+    "remaining_platform_work": "None for the reviewed retained source delta. MG21 legacy vendor boot limitations are identified, not claimed fixed.",
+    "completion_scope": "Every inventoried item has a reviewed migration/upstream-replacement/exclusion decision; retained features are migrated and originals are preserved."
   },
   "hash_regression_report": "tests/peripherals/SiLabs/symcrypto_hash_validation_20261102.json",
   "performance_report": "tests/peripherals/SiLabs/performance_validation_20261102.json",

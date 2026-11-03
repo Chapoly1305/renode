@@ -1,7 +1,6 @@
 {
   "date": "2026-11-02",
-  "all_previous_changes_migrated": false,
-  "scope_statement": "Selected 21+6 GitHub delta, all 17 inventoried local C# variants, and all 51 overlay-related files have explicit migration or exclusion decisions. Full deployed-runtime equivalence, vendor commissioning and host/container migration remain incomplete.",
+  "scope_statement": "Every inventoried Git delta, local variant and overlay has an explicit disposition. Retained improvements are migrated, upstream equivalents are adopted, and experimental exclusions are recorded. Source-built stock commissioning/CASE/Read/Toggle/Read and rootless packaging pass; legacy firmware/timing limits and exact old DLL provenance remain documented.",
   "completed": [
     {
       "scope": "Renode matter-emulated-commissioning",
@@ -979,14 +978,14 @@
     },
     {
       "item": "Board/peripheral overlays",
-      "status": "PORT_COMPLETE_COMPONENT_VALIDATED_VENDOR_REPLAY_PENDING",
+      "status": "PORT_COMPLETE_COMPONENT_AND_SELECTED_VENDOR_VALIDATED",
       "examples": [
         "deviceNumber/flash-size selection",
         "38.4/40 MHz and PA variants",
         "SMU/DCDC/BURTC/IADC",
         "xG26 EUSART/I2C/SPI-NOR mappings"
       ],
-      "reason": "All 51 entries reviewed. Current 26q3 SoCs inherited instead of old full copies; real Series-2 I2C/NOR/BURTC contracts and 47 profile loads pass. ADC/TrustZone/timer/LF compensation and diagnostic limits remain explicit."
+      "reason": "All 51 entries reviewed. Current 26q3 SoCs inherited instead of old full copies; real Series-2 I2C/NOR/BURTC contracts and 47 profile loads pass. ADC/TrustZone/timer/LF compensation and diagnostic limits remain explicit. Selected Ltech and LG MG24A full commissioning/operational controls also pass; broad corpus qualification remains limited."
     },
     {
       "item": "CMU 38.4 MHz calibration compensation",
@@ -1001,12 +1000,12 @@
     {
       "item": "Full runtime image differences",
       "status": "LAB_SOURCE_DIRTY_FILES_ARCHIVED_RETAINED_CONTRACTS_REGRESSED",
-      "finding": "Recovered lab source base and all three dirty model files; additional EUSART4 completion ported. Preserved upstream hash/staged-CCM replacements. Reimplemented LG aliases/TXFL contracts have tests and the selected LG MG24A profile now completes full commissioning and state-changing operations. Exact original runtime-loaded LG source and old DLL build provenance are unavailable; bitwise equivalence is not claimed."
+      "finding": "Recovered lab source base and all three dirty model files; additional EUSART4 completion ported. Preserved upstream hash/staged-CCM replacements. Reimplemented LG aliases/TXFL contracts have tests and the selected LG MG24A profile now completes full commissioning and state-changing operations. Exact original runtime-loaded LG source and old DLL build provenance are unavailable; bitwise equivalence is not claimed. Final RF shadow/Storage0 reset audit found and corrected stale compatibility state: three baseline failures, six corrected component tests and both stock full flows pass."
     },
     {
       "item": "Commissioning host/container tooling",
-      "status": "FULL_SOURCE_BUILD_AND_STOCK_E2E_PASS_CLEAN_REBUILD_PENDING",
-      "finding": "Exact top-level and nested OTBR OpenThread commits recovered and published separately. All host tools now build from source. Ltech and selected LG MG24A profile pass full native Thread/CASE/CommissioningComplete and verified Read/Toggle/Read. Self-contained rootless image passes Ltech. Fresh checkout build remains under test.",
+      "status": "SOURCE_BUILT_ROOTLESS_PACKAGE_AND_STOCK_E2E_VALIDATED",
+      "finding": "Clean GitHub checkout builds Renode, chip-tool, OT CLI, OTBR and its distinct pinned simulation RCP. Bundled image requires only an ELF and evidence mount. Ltech and explicit LG MG24A profile pass full native CASE, CommissioningComplete and Read/Toggle/Read with state changes.",
       "recovery_report": "tests/peripherals/SiLabs/lab_recovery_validation_20261103.json"
     },
     {
@@ -1042,9 +1041,11 @@
     "tests/peripherals/SiLabs/lab_recovery_validation_20261103.json"
   ],
   "latest_checkpoint": {
-    "infrastructure": "03fbfb64",
-    "status": "IN_PROGRESS",
+    "infrastructure": "380fd1b485d84fcc943dd3a3bdd60aac20baa2ed",
+    "status": "SOURCE_REBASE_QUALIFIED",
     "all_required_work_complete": false,
     "report": "tests/peripherals/SiLabs/stock_e2e_validation_20261103.json"
-  }
+  },
+  "all_previous_changes_analyzed": true,
+  "all_retained_improvements_migrated": true
 }

@@ -1,8 +1,8 @@
 {
   "date_utc": "2026-11-03",
-  "status": "RF_RESET_COMPONENT_PASS_FINAL_IMAGE_REPLAY_PENDING",
+  "status": "SOURCE_REBASE_AND_ROOTLESS_PACKAGE_QUALIFIED",
   "all_required_work_complete": false,
-  "infrastructure": "e9dcc57bc1b577008dded33c864f20892c0d2430",
+  "infrastructure": "380fd1b485d84fcc943dd3a3bdd60aac20baa2ed",
   "infrastructure_model_code": "239558d5af3070ce69da4f64d9daa909c7d75647",
   "tlib": "c04d273709cfe8e604233199dc54f638210c9eb5",
   "sdk": "4b82451ee229cd66e54cce8b2681bad4045b8a0f",
@@ -267,7 +267,7 @@
     "dockerfile": "docker/Dockerfile.stock",
     "launcher": "docker/stock.sh",
     "image": "local/renode-stock:26q3",
-    "image_id": "sha256:9df90d17a63428359c51bde4b81094485fcd9e2acdb675177e5a51b556288b83",
+    "image_id": "sha256:ecdd345ac7d71485ef226f89fd850512c8dcbf24e06155cb742635ec3f04ab74",
     "source_binaries_only": true,
     "runtime_source_mount_required": false,
     "old_lab_binary_required": false,
@@ -279,7 +279,8 @@
       "net.ipv6.conf.all.forwarding=1 in container network namespace"
     ],
     "Ltech_full_pass": true,
-    "clean_checkout_build": "PENDING"
+    "clean_checkout_build": "PASS",
+    "LG_MG24A_full_pass": true
   },
   "MG21_vendor_limit": {
     "firmware_SHA256": "aed8883fddc565ba8211d3a235fbae4172bb3949c54dd183ab8c9a748d510ec8",
@@ -309,8 +310,7 @@
     "Existing production runtime has not been replaced."
   ],
   "remaining": [
-    "Final image packet replay after RF reset correction",
-    "Final inventory audit, commit and private artifact backup"
+    "Private final material backup and remote push verification"
   ],
   "initial_clean_checkout": {
     "build_command": "docker/stock.sh build",
@@ -446,6 +446,161 @@
     "main_rebuild": "PASS: ./build.sh --skip-fetch; 0 warnings, 0 errors, 33.55s MSBuild",
     "baseline_log": "output/local-migration/lpw-reset-baseline-valid.log",
     "fixed_log": "output/local-migration/lpw-reset-after.log",
-    "scope": "Reset shadow fallback values and Storage0 poll history; preserve modeled read-only fields and secure/nonsecure aliases. This is compatibility behavior, not physical silicon fidelity."
+    "scope": "Reset shadow fallback values and Storage0 poll history; preserve modeled read-only fields and secure/nonsecure aliases. This is compatibility behavior, not physical silicon fidelity.",
+    "cold_build_methods_passed": 6,
+    "final_Ltech_full_pass": true,
+    "final_LG_full_pass": true
+  },
+  "source_rebase_complete": true,
+  "final_image_controls": {
+    "final-bundled-ltech": {
+      "status": "FULL_PASS",
+      "elapsed_seconds": 35.38,
+      "pairing_returncode": 0,
+      "elf_sha256": "d69b8da3b7c254c155989743738048f29a8e6c3b907eee59c9d42c6e7b01a0f8",
+      "chip_tool_sha256": "a8ed7c5abca84d18f5167076f3d392e2b4ede147f2b331bd50289494df6e3533",
+      "platform": "platforms/boards/silabs/brd2601b.repl",
+      "PASE_established": true,
+      "network_enable_started": true,
+      "network_enable_completed": true,
+      "UDP_CASE_Sigma2_received": true,
+      "hostmailbox_compensation": "on",
+      "BTP_timeout_overrides_ms": 90000,
+      "pase_only": false,
+      "thread_host": "OTBR",
+      "operational": {
+        "read_before": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "read",
+            "on-off",
+            "1",
+            "1"
+          ]
+        },
+        "invoke_toggle": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "toggle",
+            "1",
+            "1"
+          ]
+        },
+        "read_after": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "read",
+            "on-off",
+            "1",
+            "1"
+          ]
+        }
+      },
+      "image": "local/renode-stock:26q3",
+      "commissioning_verified": true,
+      "onoff_before": [
+        "TRUE"
+      ],
+      "onoff_after": [
+        "FALSE"
+      ],
+      "operational_verified": true,
+      "scope": "Unmodified firmware, native chip-tool, real OTBR/TUN and UDP CASE. FULL_PASS requires successful commissioning plus Read/Toggle/Read with an observed state change. Hostmailbox and timeout compensation remain explicit."
+    },
+    "final-bundled-lg": {
+      "status": "FULL_PASS",
+      "elapsed_seconds": 40.23,
+      "pairing_returncode": 0,
+      "elf_sha256": "9736771a0e3a15fb01804d6435854379374c704a67ceb9e1e518b045c725e24f",
+      "chip_tool_sha256": "a8ed7c5abca84d18f5167076f3d392e2b4ede147f2b331bd50289494df6e3533",
+      "platform": "matter/renode-thread/overlays/brd2601b_mg24a.repl",
+      "PASE_established": true,
+      "network_enable_started": true,
+      "network_enable_completed": true,
+      "UDP_CASE_Sigma2_received": true,
+      "hostmailbox_compensation": "on",
+      "BTP_timeout_overrides_ms": 90000,
+      "pase_only": false,
+      "thread_host": "OTBR",
+      "operational": {
+        "read_before": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "read",
+            "on-off",
+            "1",
+            "1"
+          ]
+        },
+        "invoke_toggle": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "toggle",
+            "1",
+            "1"
+          ]
+        },
+        "read_after": {
+          "returncode": 0,
+          "command": [
+            "onoff",
+            "read",
+            "on-off",
+            "1",
+            "1"
+          ]
+        }
+      },
+      "image": "local/renode-stock:26q3",
+      "commissioning_verified": true,
+      "onoff_before": [
+        "FALSE"
+      ],
+      "onoff_after": [
+        "TRUE"
+      ],
+      "operational_verified": true,
+      "scope": "Unmodified firmware, native chip-tool, real OTBR/TUN and UDP CASE. FULL_PASS requires successful commissioning plus Read/Toggle/Read with an observed state change. Hostmailbox and timeout compensation remain explicit."
+    },
+    "final-bundled-quectel": {
+      "status": "PAIRING_FAILED",
+      "elapsed_seconds": 114.9,
+      "pairing_returncode": 1,
+      "elf_sha256": "cec91b36cc652f684b1445a2ba54f8fdfcc5e6f6047d3dc2b613d57d8a85b73e",
+      "chip_tool_sha256": "a8ed7c5abca84d18f5167076f3d392e2b4ede147f2b331bd50289494df6e3533",
+      "platform": "platforms/boards/silabs/brd2601b.repl",
+      "PASE_established": true,
+      "network_enable_started": true,
+      "network_enable_completed": false,
+      "UDP_CASE_Sigma2_received": false,
+      "hostmailbox_compensation": "on",
+      "BTP_timeout_overrides_ms": 90000,
+      "pase_only": false,
+      "thread_host": "OTBR",
+      "operational": {},
+      "image": "local/renode-stock:26q3",
+      "commissioning_verified": false,
+      "onoff_before": [],
+      "onoff_after": [],
+      "operational_verified": false,
+      "scope": "Unmodified firmware, native chip-tool, real OTBR/TUN and UDP CASE. FULL_PASS requires successful commissioning plus Read/Toggle/Read with an observed state change. Hostmailbox and timeout compensation remain explicit."
+    }
+  },
+  "final_clean_build": {
+    "command": "docker/stock.sh build",
+    "source_commit": "deb4cd2fa85b057538597a27fbf7e0580e94c303",
+    "infrastructure": "e9dcc57bc1b577008dded33c864f20892c0d2430",
+    "model_code": "239558d5af3070ce69da4f64d9daa909c7d75647",
+    "pipeline_exit_code": 0,
+    "Renode_Build_succeeded_observed": true,
+    "warnings": 0,
+    "errors": 0,
+    "SDK_timeout_tests_passed": 2,
+    "RF_reset_component_tests_passed": 6
   }
 }
