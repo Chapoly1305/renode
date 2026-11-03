@@ -16,7 +16,9 @@ import uuid
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--runtime", action="append", required=True, metavar="NAME=PATH")
+    runtime_choice = parser.add_mutually_exclusive_group(required=True)
+    runtime_choice.add_argument("--runtime", action="append", metavar="NAME=PATH")
+    runtime_choice.add_argument("--bundled-image", help="Image containing the complete /opt/renode runtime")
     parser.add_argument("--elf", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--timeout", type=float, default=70)
@@ -27,7 +29,10 @@ def main():
     parser.add_argument("--image", default="local/renode-build:silabs-26q3")
     parser.add_argument("--hostmailbox-compensation", action="store_true",
                         help="Opt into the stock-harness masked-doorbell compensation; invalid for IRQ/timing fidelity claims")
+    parser.add_argument("--campaign-label", help="Optional unique Docker label value for safe watchdog cleanup")
     args = parser.parse_args()
+    if args.campaign_label and not re.fullmatch(r"[a-z0-9-]+", args.campaign_label):
+        parser.error("invalid campaign label")
     elf = args.elf.resolve(strict=True)
     data = elf.read_bytes()
     if not data.startswith(b"\x7fELF"):
@@ -37,17 +42,17 @@ def main():
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
     results = []
-    for specification in args.runtime:
-        label, root = specification.split("=", 1)
+    specifications = [("stock", None)] if args.bundled_image else [specification.split("=", 1) for specification in args.runtime]
+    for label, runtime_root in specifications:
         if not re.fullmatch(r"[\w-]+", label):
             parser.error("runtime label must contain letters, numbers, hyphens or underscores")
-        root = Path(root).resolve(strict=True)
+        root = Path(runtime_root).resolve(strict=True) if runtime_root else None
         platform = args.platform or Path(f"platforms/boards/silabs/{args.board}.repl")
         platforms = [platform, *args.overlay]
         for path in platforms:
             if path.is_absolute() or not re.fullmatch(r"[\w./-]+\.repl", str(path)) or '..' in path.parts:
                 parser.error("platform paths must be relative .repl paths without parent traversal")
-            if not (root / path).resolve(strict=True).is_relative_to(root):
+            if root and not (root / path).resolve(strict=True).is_relative_to(root):
                 parser.error("platform must resolve inside the runtime root")
         if args.overlay:
             # Merge registration cancellations before instantiation. Loading a
@@ -80,10 +85,14 @@ start
 ''')
         name = "renode-regression-" + uuid.uuid4().hex[:12]
         command = ["docker", "run", "--rm", "--name", name, "--memory", "3g",
-                   "--pids-limit", "512", "-w", "/work", "-v", f"{root}:/work:ro",
-                   "-v", f"{elf}:/workspace/device.elf:ro", "-v", f"{case}:/evidence",
-                   args.image, "./renode", "--disable-xwt", "--hide-log", "--port",
-                   "3456", "/evidence/boot.resc"]
+                   "--pids-limit", "512", "-w", "/work" if root else "/opt/renode",
+                   "-v", f"{elf}:/workspace/device.elf:ro", "-v", f"{case}:/evidence"]
+        if root:
+            command += ["-v", f"{root}:/work:ro"]
+        if args.campaign_label:
+            command += ["--label", f"silabs.qualification={args.campaign_label}"]
+        command += [args.bundled_image or args.image, "./renode", "--disable-xwt", "--hide-log",
+                    "--port", "3456", "/evidence/boot.resc"]
         # Renode's telnet monitor initializes the startup script on connection.
         connect = '''import socket,time,sys
 for i in range(100):
@@ -130,7 +139,8 @@ while True:
                 proc.wait(timeout=10)
                 if connector is not None:
                     connector.wait(timeout=10)
-        result = {"runtime": label, "root": str(root), "status": status,
+        result = {"runtime": label, "root": str(root) if root else None,
+                  "image": args.bundled_image or args.image, "status": status,
                   "elapsed_seconds": round(elapsed, 2), "elf": str(elf),
                   "elf_sha256": hashlib.sha256(data).hexdigest(), "board": args.board,
                   "platform": str(platform), "overlays": [str(p) for p in args.overlay],
