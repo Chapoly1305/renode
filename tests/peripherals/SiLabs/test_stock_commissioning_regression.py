@@ -70,6 +70,25 @@ class EvidenceTests(unittest.TestCase):
         self.assertFalse(stock.command_succeeded('SoftwareVersion: 2', completed=False))
         self.assertTrue(stock.command_succeeded('SoftwareVersion: 2'))
 
+    def test_live_non_tty_without_prompt_is_not_pase_success(self):
+        # Reproduces the first real smoke's failure mode: initialization logs
+        # appear but libedit suppresses >>> when stdin/stdout are ordinary pipes.
+        fake = "import sys; print('CHIP task running', flush=True); sys.stdin.readline()"
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / 'interactive.log'
+            with log.open('w') as output:
+                proc = subprocess.Popen([sys.executable, '-u', '-c', fake],
+                                        stdin=subprocess.PIPE, stdout=output, text=True)
+                try:
+                    text, ready = stock.wait_for_prompt(proc, log, 0.3)
+                    self.assertIn('CHIP task running', text)
+                    self.assertFalse(ready)
+                    self.assertIsNone(proc.poll())
+                    self.assertFalse(stock.command_succeeded(text, ready))
+                finally:
+                    proc.stdin.close()
+                    proc.wait(timeout=3)
+
     def test_process_exit_without_prompt_is_not_a_completed_read(self):
         with tempfile.TemporaryDirectory() as tmp:
             log = Path(tmp) / 'interactive.log'
