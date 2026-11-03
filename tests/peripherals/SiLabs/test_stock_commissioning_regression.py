@@ -129,6 +129,7 @@ for line in sys.stdin:
     def test_pase_only_actual_runner_reads_in_one_interactive_process(self):
         """Simulated chip-tool prompt proves the runner sends all four commands."""
         interactive = '''import sys
+if not sys.stdin.isatty(): sys.exit('editline requires a TTY')
 sys.stdout.write('>>> '); sys.stdout.flush()
 for line in sys.stdin:
  line=line.strip()
@@ -185,6 +186,7 @@ for line in sys.stdin:
             self.assertEqual(result['attribute_reads']['software_version']['value'], 42)
             self.assertEqual(result['onoff_applicability'], 'NOT_APPLICABLE')
             self.assertEqual(len(seen), 1)
+            self.assertIn('-t', seen[0])
             self.assertIn('--pase-only 1', (output / 'pairing.log').read_text())
             self.assertIn('SpecificationVersion:', (output / 'basic_specification_version.log').read_text())
 

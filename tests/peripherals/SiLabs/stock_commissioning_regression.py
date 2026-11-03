@@ -5,11 +5,15 @@ The supplied firmware is mounted read-only. PASE reads are not commissioning;
 only discovered OnOff servers are candidates for Read/Toggle/Read.
 """
 import argparse
+import errno
 import hashlib
 import json
+import os
 from pathlib import Path
+import pty
 import re
 import subprocess
+import threading
 import time
 import uuid
 
@@ -64,6 +68,40 @@ def onoff_endpoint(parts, servers):
     if set(parts) != set(servers) or any(clusters is None for clusters in servers.values()):
         return None
     return next((endpoint for endpoint in sorted(parts) if ONOFF_CLUSTER_ID in servers[endpoint]), None)
+
+
+def start_interactive(command, log_path):
+    """Attach editline to a real PTY; a redirected pipe suppresses its prompt."""
+    master, slave = pty.openpty()
+    try:
+        process = subprocess.Popen(command, stdin=slave, stdout=slave, stderr=slave)
+    except BaseException:
+        os.close(master)
+        raise
+    finally:
+        os.close(slave)
+    process.stdin = os.fdopen(os.dup(master), 'w', encoding='utf-8', buffering=1)
+
+    def capture():
+        try:
+            with log_path.open('wb') as log:
+                while True:
+                    try:
+                        chunk = os.read(master, 65536)
+                    except OSError as error:
+                        if error.errno == errno.EIO:  # Linux PTY EOF after the slave exits.
+                            break
+                        raise
+                    if not chunk:
+                        break
+                    log.write(chunk)
+                    log.flush()
+        finally:
+            os.close(master)
+
+    reader = threading.Thread(target=capture, daemon=True)
+    reader.start()
+    return process, reader
 
 
 def wait_for_prompt(process, log_path, timeout, start=0, marker=None):
@@ -231,7 +269,7 @@ while True:
 '''
     started = time.monotonic()
     status, pairing_code = 'BOOT_TIMEOUT', None
-    processes, streams = [], []
+    processes, streams, readers = [], [], []
     operational, attribute_reads = {}, {}
     endpoint_servers = {}
     applicability, selected_endpoint = 'UNRESOLVED', None
@@ -381,11 +419,11 @@ while True:
         if args.pase_only:
             # The same chip-tool process retains GetDeviceBeingCommissioned's PASE
             # proxy for subsequent reads; exiting chip-tool discards that session.
-            client = subprocess.Popen([*chip_exec[:2], '-i', *chip_exec[2:], '-w', '/tmp', name,
-                                       '/host-tools/chip-tool', 'interactive', 'start'],
-                                      stdin=subprocess.PIPE, stdout=stream('interactive.log'),
-                                      stderr=subprocess.STDOUT, text=True)
+            client, reader = start_interactive(
+                [*chip_exec[:2], '-i', '-t', *chip_exec[2:], '-w', '/tmp', name,
+                 '/host-tools/chip-tool', 'interactive', 'start'], out / 'interactive.log')
             processes.append(client)
+            readers.append(reader)
             _, ready = wait_for_prompt(client, out / 'interactive.log', 15)
             if not ready:
                 raise RuntimeError('chip-tool interactive prompt unavailable; inspect interactive.log')
@@ -475,6 +513,8 @@ while True:
                 stdin.close()
             try: process.wait(timeout=5)
             except subprocess.TimeoutExpired: process.kill(); process.wait()
+        for reader in readers:
+            reader.join(timeout=5)
         for handle in streams:
             handle.close()
         subprocess.run(['docker', 'network', 'rm', network], capture_output=True)
